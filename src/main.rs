@@ -42,6 +42,10 @@ struct Opt {
     /// A JSON file describing what columns to geocode.
     #[structopt(long = "spec")]
     spec_path: PathBuf,
+
+    /// What license to use. Leave blank for standard, `us-rooftop-geocoding-enterprise-cloud` for Rooftop.
+    #[structopt(long = "license", default_value = "us-standard-cloud")]
+    license: String,
 }
 
 // Generate a boilerplate `main` function.
@@ -61,6 +65,7 @@ fn run() -> Result<()> {
     let geocode_fut = geocode_stdio(
         spec,
         opt.match_strategy,
+        opt.license,
         opt.on_duplicate_columns,
         structure,
     );

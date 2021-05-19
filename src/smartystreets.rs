@@ -119,9 +119,15 @@ impl SmartyStreets {
     pub async fn street_addresses(
         &self,
         requests: Vec<AddressRequest>,
+        license: String,
     ) -> Result<Vec<Option<AddressResponse>>> {
-        street_addresses_impl(self.credentials.clone(), self.client.clone(), requests)
-            .await
+        street_addresses_impl(
+            self.credentials.clone(),
+            self.client.clone(),
+            requests,
+            license,
+        )
+        .await
     }
 }
 
@@ -129,12 +135,14 @@ async fn street_addresses_impl(
     credentials: Credentials,
     client: SharedHyperClient,
     requests: Vec<AddressRequest>,
+    license: String,
 ) -> Result<Vec<Option<AddressResponse>>> {
     // Build our URL.
     let mut url = Url::parse("https://api.smartystreets.com/street-address")?;
     url.query_pairs_mut()
         .append_pair("auth-id", &credentials.auth_id)
         .append_pair("auth-token", &credentials.auth_token)
+        .append_pair("license", &license)
         .finish();
 
     // Make the geocoding request.

@@ -76,6 +76,7 @@ enum Message {
 pub async fn geocode_stdio(
     spec: AddressColumnSpec<String>,
     match_strategy: MatchStrategy,
+    license: String,
     on_duplicate_columns: OnDuplicateColumns,
     structure: Structure,
 ) -> Result<()> {
@@ -107,7 +108,13 @@ pub async fn geocode_stdio(
         let mut stream = in_rx
             // Turn input messages into futures that yield output messages.
             .map(move |message| {
-                geocode_message(client.clone(), match_strategy, message).boxed()
+                geocode_message(
+                    client.clone(),
+                    match_strategy,
+                    license.clone(),
+                    message,
+                )
+                .boxed()
             })
             // Turn output message futures into output messages in parallel.
             .buffered(CONCURRENCY);
@@ -346,13 +353,14 @@ fn write_csv_to_stdout(mut rx: Receiver<Message>) -> Result<()> {
 async fn geocode_message(
     client: SharedHyperClient,
     match_strategy: MatchStrategy,
+    license: String,
     message: Message,
 ) -> Result<Message> {
     match message {
         Message::Chunk(chunk) => {
             trace!("geocoding {} rows", chunk.rows.len());
             Ok(Message::Chunk(
-                geocode_chunk(client, match_strategy, chunk).await?,
+                geocode_chunk(client, match_strategy, license, chunk).await?,
             ))
         }
         Message::EndOfStream => {
@@ -366,6 +374,7 @@ async fn geocode_message(
 async fn geocode_chunk(
     client: SharedHyperClient,
     match_strategy: MatchStrategy,
+    license: String,
     mut chunk: Chunk,
 ) -> Result<Chunk> {
     // Build a list of addresses to geocode.
@@ -397,7 +406,9 @@ async fn geocode_chunk(
     let geocoded = loop {
         // TODO: The `clone` here is expensive. We might want to move the
         // `retry` loop inside of `street_addresses`.
-        let result = smartystreets.street_addresses(addresses.clone()).await;
+        let result = smartystreets
+            .street_addresses(addresses.clone(), license.clone())
+            .await;
         match result {
             Err(ref err) if failures < 5 => {
                 failures += 1;
