@@ -4,7 +4,6 @@
 #![recursion_limit = "128"]
 
 use common_failures::quick_main;
-use env_logger;
 use failure::Error;
 use futures::FutureExt;
 use std::{path::PathBuf, result};

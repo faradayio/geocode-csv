@@ -5,7 +5,6 @@ use futures::stream::StreamExt;
 use hyper::{client::HttpConnector, Body, Client, Request};
 use hyper_tls::HttpsConnector;
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::{
     env,
     str::{self, FromStr},
