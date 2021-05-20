@@ -365,7 +365,7 @@ dependencies = [
 
 [[package]]
 name = "geocode-csv"
-version = "0.3.0-beta.2"
+version = "0.3.0-beta.3"
 dependencies = [
  "cli_test_dir",
  "common_failures",
