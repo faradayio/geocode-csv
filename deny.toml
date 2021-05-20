@@ -10,7 +10,7 @@ unlicensed = "deny"
 copyleft = "deny"
 
 # Allow common non-restrictive licenses.
-allow = ["MIT", "Apache-2.0", "BSD-3-Clause", "BSD-2-Clause", "CC0-1.0"]
+allow = ["MIT", "Apache-2.0", "BSD-3-Clause", "CC0-1.0"]
 
 # Many organizations ban AGPL-licensed code
 # https://opensource.google/docs/using/agpl-policy/
