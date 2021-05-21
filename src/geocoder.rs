@@ -12,6 +12,7 @@ use std::{
 };
 use strum_macros::EnumString;
 use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::addresses::AddressColumnSpec;
 use crate::async_util::run_sync_fn_in_background;
@@ -83,7 +84,7 @@ pub async fn geocode_stdio(
     // Set up bounded channels for communication between the sync and async
     // worlds.
     let (in_tx, in_rx) = mpsc::channel::<Message>(CHANNEL_BUFFER);
-    let (mut out_tx, out_rx) = mpsc::channel::<Message>(CHANNEL_BUFFER);
+    let (out_tx, out_rx) = mpsc::channel::<Message>(CHANNEL_BUFFER);
 
     // Hook up our inputs and outputs, which are synchronous functions running
     // in their own threads.
@@ -105,6 +106,7 @@ pub async fn geocode_stdio(
     // Geocode each chunk that we see, with up to `CONCURRENCY` chunks being
     // geocoded at a time.
     let geocode_fut = async move {
+        let in_rx = ReceiverStream::new(in_rx);
         let mut stream = in_rx
             // Turn input messages into futures that yield output messages.
             .map(move |message| {
@@ -175,7 +177,7 @@ fn read_csv_from_stdin(
     spec: AddressColumnSpec<String>,
     structure: Structure,
     on_duplicate_columns: OnDuplicateColumns,
-    mut tx: Sender<Message>,
+    tx: Sender<Message>,
 ) -> Result<()> {
     // Open up our CSV file and get the headers.
     let stdin = io::stdin();
@@ -312,12 +314,13 @@ fn remove_columns(row: &StringRecord, remove_column_flags: &[bool]) -> StringRec
 }
 
 /// Receive chunks of a CSV file from `rx` and write them to standard output.
-fn write_csv_to_stdout(mut rx: Receiver<Message>) -> Result<()> {
+fn write_csv_to_stdout(rx: Receiver<Message>) -> Result<()> {
     let stdout = io::stdout();
     let mut wtr = csv::Writer::from_writer(stdout.lock());
 
     let mut headers_written = false;
     let mut end_of_stream_seen = false;
+    let mut rx = ReceiverStream::new(rx);
     while let Some(message) = block_on(rx.next()) {
         match message {
             Message::Chunk(chunk) => {
