@@ -1,7 +1,7 @@
 //! Various subsets of data potenitally returned by SmartyStreets.
 
+use anyhow::format_err;
 use csv::StringRecord;
-use failure::format_err;
 use serde_json::{self, Map, Value};
 use std::borrow::Cow;
 

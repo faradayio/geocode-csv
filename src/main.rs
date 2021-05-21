@@ -3,25 +3,25 @@
 
 #![recursion_limit = "128"]
 
-use common_failures::quick_main;
-use failure::Error;
+use anyhow::Error;
+pub use anyhow::Result;
 use futures::FutureExt;
-use std::{path::PathBuf, result};
+use std::{path::PathBuf, process::exit};
 use structopt::StructOpt;
 
 mod addresses;
 mod async_util;
+mod errors;
 mod geocoder;
 mod smartystreets;
 mod structure;
 mod unpack_vec;
 
-use addresses::AddressColumnSpec;
-use geocoder::{geocode_stdio, OnDuplicateColumns};
-use smartystreets::MatchStrategy;
-use structure::Structure;
-
-type Result<T> = result::Result<T, Error>;
+use crate::addresses::AddressColumnSpec;
+use crate::errors::display_causes_and_backtrace;
+use crate::geocoder::{geocode_stdio, OnDuplicateColumns};
+use crate::smartystreets::MatchStrategy;
+use crate::structure::Structure;
 
 /// Our command-line arguments.
 #[derive(Debug, StructOpt)]
@@ -47,14 +47,18 @@ struct Opt {
     license: String,
 }
 
-// Generate a boilerplate `main` function.
-quick_main!(run);
-
-/// Our main entry point.
-fn run() -> Result<()> {
+fn main() {
     // Set up basic logging.
     env_logger::init();
 
+    if let Err(err) = run() {
+        display_causes_and_backtrace(&err);
+        exit(1);
+    }
+}
+
+/// Our main entry point.
+fn run() -> Result<()> {
     // Parse our command-line arguments.
     let opt = Opt::from_args();
     let spec = AddressColumnSpec::from_path(&opt.spec_path)?;

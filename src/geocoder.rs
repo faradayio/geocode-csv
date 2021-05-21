@@ -1,8 +1,7 @@
 //! Geocoding support.
 
-use common_failures::prelude::*;
+use anyhow::{format_err, Context, Error};
 use csv::{self, StringRecord};
-use failure::{format_err, ResultExt};
 use futures::{executor::block_on, future, FutureExt, StreamExt};
 use hyper::Client;
 use hyper_tls::HttpsConnector;
@@ -16,6 +15,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::addresses::AddressColumnSpec;
 use crate::async_util::run_sync_fn_in_background;
+use crate::errors::display_causes_and_backtrace;
 use crate::smartystreets::{
     AddressRequest, MatchStrategy, SharedHyperClient, SmartyStreets,
 };
@@ -138,15 +138,9 @@ pub async fn geocode_stdio(
         future::join3(read_fut, geocode_fut, write_fut).await;
 
     // Wrap any errors with context.
-    let read_result: Result<()> = read_result
-        .context("error reading input")
-        .map_err(|e| e.into());
-    let geocode_result: Result<()> = geocode_result
-        .context("error geocoding")
-        .map_err(|e| e.into());
-    let write_result: Result<()> = write_result
-        .context("error writing output")
-        .map_err(|e| e.into());
+    let read_result: Result<()> = read_result.context("error reading input");
+    let geocode_result: Result<()> = geocode_result.context("error geocoding");
+    let write_result: Result<()> = write_result.context("error writing output");
 
     // Print if one of the processes fails, it will usually cause the other two
     // to fail. We could try to figure out the "root" cause for the user, or we
@@ -154,19 +148,21 @@ pub async fn geocode_stdio(
     let mut failed = false;
     if let Err(err) = &read_result {
         failed = true;
-        eprintln!("{}", err.display_causes_and_backtrace());
+        display_causes_and_backtrace(err);
     }
     if let Err(err) = &geocode_result {
         failed = true;
-        eprintln!("{}", err.display_causes_and_backtrace());
+        display_causes_and_backtrace(err);
     }
     if let Err(err) = &write_result {
         failed = true;
-        eprintln!("{}", err.display_causes_and_backtrace());
+        display_causes_and_backtrace(err);
     }
 
     if failed {
-        Err(format_err!("geocoding stdio failed"))
+        Err(format_err!(
+            "geocoding stdio failed because of the above errors"
+        ))
     } else {
         Ok(())
     }
@@ -419,9 +415,7 @@ async fn geocode_chunk(
                 sleep(Duration::from_secs(2));
             }
             Err(err) => {
-                return Err(err)
-                    .context("smartystreets error")
-                    .map_err(|e| e.into());
+                return Err(err).context("smartystreets error");
             }
             Ok(geocoded) => {
                 break geocoded;

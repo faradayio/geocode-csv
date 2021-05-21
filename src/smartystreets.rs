@@ -1,6 +1,6 @@
 //! Interface to SmartyStreets REST API.
 
-use failure::{format_err, ResultExt};
+use anyhow::{format_err, Context};
 use futures::stream::StreamExt;
 use hyper::{client::HttpConnector, Body, Client, Request};
 use hyper_tls::HttpsConnector;

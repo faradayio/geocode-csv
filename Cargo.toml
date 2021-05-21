@@ -14,10 +14,9 @@ documentation = "https://github.com/faradayio/geocode-csv"
 cli_test_dir = "0.1.7"
 
 [dependencies]
-common_failures = "0.1.1"
+anyhow = { version = "1.0.40", features = ["backtrace"] }
 csv = "1.0.7"
 env_logger = "0.8.3"
-failure = "0.1.5"
 futures = "0.3.4"
 hyper = { version = "0.14.7", features = ["client", "http2", "stream"] }
 hyper-tls = "0.5.0"

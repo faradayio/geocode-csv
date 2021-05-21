@@ -1,7 +1,7 @@
 //! Types related to addresses.
 
+use anyhow::{format_err, Context};
 use csv::StringRecord;
-use failure::{format_err, ResultExt};
 use serde::{Deserialize, Serialize};
 use std::{
     borrow::Cow,
@@ -271,9 +271,9 @@ impl AddressColumnSpec<String> {
     /// Load an `AddressColumnSpec` from a file.
     pub fn from_path(path: &Path) -> Result<Self> {
         let f = File::open(path)
-            .with_context(|_| format_err!("cannot open {}", path.display()))?;
-        Ok(serde_json::from_reader(f)
-            .with_context(|_| format_err!("error parsing {}", path.display()))?)
+            .with_context(|| format_err!("cannot open {}", path.display()))?;
+        serde_json::from_reader(f)
+            .with_context(|| format_err!("error parsing {}", path.display()))
     }
 
     /// Given an `AddressColumnSpec` using strings, and the header row of a CSV

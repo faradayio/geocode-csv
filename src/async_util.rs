@@ -1,11 +1,9 @@
 //! Utilities for working with async tasks.
 
-use failure::ResultExt;
+use anyhow::{Context, Result};
 use futures::executor::block_on;
 use std::thread;
 use tokio::sync::mpsc;
-
-use crate::Result;
 
 /// Run a synchronous function `f` in a background worker thread and return its
 /// value.

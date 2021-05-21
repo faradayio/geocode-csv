@@ -1,6 +1,6 @@
 //! Unpacking vectors.
 
-use failure::format_err;
+use anyhow::format_err;
 
 use crate::Result;
 
