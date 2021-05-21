@@ -10,7 +10,7 @@ unlicensed = "deny"
 copyleft = "deny"
 
 # Allow common non-restrictive licenses.
-allow = ["MIT", "Apache-2.0", "BSD-3-Clause", "CC0-1.0"]
+allow = ["MIT", "Apache-2.0", "CC0-1.0"]
 
 # Many organizations ban AGPL-licensed code
 # https://opensource.google/docs/using/agpl-policy/
@@ -23,8 +23,6 @@ multiple-versions = "warn"
 skip = [
     # clap v2.33.0 still uses an older version.
     { name = "strsim", version = "0.8.0" },
-    # mio uses an older version.
-    { name = "winapi", version = "0.2.8" },
 ]
 
 skip-tree = []
