@@ -28,8 +28,8 @@ use crate::structure::Structure;
 #[structopt(about = "geocode CSV files passed on standard input")]
 struct Opt {
     /// `strict` for valid postal addresses only, `range` for unknown addresses
-    /// within a street's known range, and `invalid` to always generate some
-    /// match.
+    /// within a street's known range, `invalid` to always generate some
+    /// match, and `enhanced` if you've paid for it.
     #[structopt(long = "match", default_value = "strict")]
     match_strategy: MatchStrategy,
 
