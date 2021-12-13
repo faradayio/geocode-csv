@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [1.0.0] - 2021-12-13
+
+Bumping number to v1.0.0 because this has been running fine in production for quite.
+
+### Added
+
+- Support `--match enhanced`. This only works for appropriate SmartyStreets plans.
+
+### Fixed
+
+- Updated dependencies to fix several CVEs reported by `cargo deny`. I do not believe that any of these CVEs actually affected `geocode-csv` in practice, but better safe than sorry.
+
 ## [0.3.0-beta.5] - 2021-05-21
 
 ### Changed
