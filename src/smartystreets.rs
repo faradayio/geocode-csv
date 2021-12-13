@@ -51,6 +51,8 @@ pub enum MatchStrategy {
     Range,
     /// Return a candidate for every address.
     Invalid,
+    /// Use "enhanced" matching (which you pay extra for)
+    Enhanced,
 }
 
 impl Default for MatchStrategy {
@@ -69,6 +71,7 @@ impl FromStr for MatchStrategy {
             "strict" => Ok(MatchStrategy::Strict),
             "range" => Ok(MatchStrategy::Range),
             "invalid" => Ok(MatchStrategy::Invalid),
+            "enhanced" => Ok(MatchStrategy::Enhanced),
             _ => Err(format_err!("unknown match strategy {:?}", s)),
         }
     }
