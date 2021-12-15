@@ -15,12 +15,12 @@ Resident,1600 Pennsylvania Avenue NW,,Washington DC,20500
 
 ```json
 {
-    "geocoded": {
-        "street": ["street1", "street2"],
-        "city": "city",
-        "state": "state",
-        "zipcode": "zip"
-    }
+  "geocoded": {
+    "street": ["street1", "street2"],
+    "city": "city",
+    "state": "state",
+    "zipcode": "zip"
+  }
 }
 ```
 
@@ -41,11 +41,23 @@ You can geocode multiple addresses per row as follows:
 
 ```json
 {
-    "geocoded_shipping": { /* ... */ },
-    "geocoded_billing": { /* ... */ }
+  "geocoded_shipping": {
+    /* ... */
+  },
+  "geocoded_billing": {
+    /* ... */
+  }
 }
 ```
 
 This will insert two sets of columns, one beginning with `geocoded_shipping_` and the other with `geocoded_billing_`.
 
-[SmartyStreets]: https://smartystreets.com/
+## A note about Macs
+
+We provide pre-built Mac binaries for Intel- and M1-based Macs. These binaries use "ad-hoc" signatures, so you may need to [set appropriate security settings](https://support.apple.com/en-us/HT202491) or run:
+
+```sh
+xattr -d com.apple.quarantine geocode-csv
+```
+
+[smartystreets]: https://smartystreets.com/
