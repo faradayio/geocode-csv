@@ -95,6 +95,7 @@ jobs:
           # virtually never breaks old code.
           toolchain: stable
           components: rustfmt, clippy
+          target: ${{ matrix.target }}
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
       - name: Check source formatting and warnings

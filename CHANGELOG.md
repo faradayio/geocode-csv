@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2021-12-13
+
+### Added
+
+- New binary builds for ARM/M1 Macs.
+
+### Changed
+
+- The downloadable `*.zip` files now include both the CPU and the OS in the name. Downloading scripts will need to be adjusted.
+- We now use `rustls` instead of OpenSSL internally. This shouldn't change anything, but it's a significant change.
+
+### Fixed
+
+- Restored missing binaries for existing platforms by switching to GitHub CI.
+
 ## [1.0.0] - 2021-12-13
 
 Bumping number to v1.0.0 because this has been running fine in production for quite.
