@@ -35,7 +35,7 @@ fn all_fields() {
     assert!(output.stdout_str().contains("gc_addressee"));
     assert!(output.stdout_str().contains("Commercial"));
     assert!(output.stdout_str().contains("Residential"));
-    assert!(output.stdout_str().contains("40.21721"));
+    assert!(output.stdout_str().contains("40.21"));
 }
 
 #[test]
