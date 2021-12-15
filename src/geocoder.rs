@@ -4,7 +4,7 @@ use anyhow::{format_err, Context, Error};
 use csv::{self, StringRecord};
 use futures::{executor::block_on, future, FutureExt, StreamExt};
 use hyper::Client;
-use hyper_tls::HttpsConnector;
+use hyper_rustls::HttpsConnectorBuilder;
 use log::{debug, error, trace, warn};
 use std::{
     cmp::max, io, iter::FromIterator, sync::Arc, thread::sleep, time::Duration,
@@ -98,9 +98,13 @@ pub async fn geocode_stdio(
     // Create a shared `hyper::Client` with a connection pool, so that we can
     // use keep-alive.
     let client = Arc::new(
-        Client::builder()
-            .pool_max_idle_per_host(CONCURRENCY)
-            .build(HttpsConnector::new()),
+        Client::builder().pool_max_idle_per_host(CONCURRENCY).build(
+            HttpsConnectorBuilder::new()
+                .with_native_roots()
+                .https_only()
+                .enable_http2()
+                .build(),
+        ),
     );
 
     // Geocode each chunk that we see, with up to `CONCURRENCY` chunks being

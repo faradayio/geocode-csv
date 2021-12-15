@@ -3,7 +3,7 @@
 use anyhow::{format_err, Context};
 use futures::stream::StreamExt;
 use hyper::{client::HttpConnector, Body, Client, Request};
-use hyper_tls::HttpsConnector;
+use hyper_rustls::HttpsConnector;
 use serde::{Deserialize, Serialize};
 use std::{
     env,
