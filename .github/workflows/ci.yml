@@ -28,7 +28,7 @@ jobs:
       - name: Extract release version
         id: extract_release_version
         run: |
-          release_version="$(echo '${{ github.ref }}')"
+          release_version="$(echo '${{ github.ref }}' | sed 's,^.*/\([^/]*\)$,\1,' )"
           echo Release version: $release_version
           echo "::set-output name=release_version::$release_version"
       - name: Extract release body from CHANGELOG.md
@@ -57,17 +57,25 @@ jobs:
 
   # We use a matrix to run our build on every supported platform.
   build:
+    name: "Build"
+
     needs:
       - create_release
 
     strategy:
       matrix:
+        # target: Official name of system to compile for.
+        # host: Official name of system doing the compiling.
+        # os: GitHub CI OS image to use on runner.
         include:
           - target: x86_64-unknown-linux-musl
+            host: x86_64-unknown-linux-musl
             os: ubuntu-latest
           - target: x86_64-apple-darwin
+            host: x86_64-apple-darwin
             os: macos-latest
           - target: aarch64-apple-darwin
+            host: x86_64-apple-darwin
             os: macos-latest
 
     runs-on: ${{ matrix.os }}
@@ -81,15 +89,28 @@ jobs:
           cargo clippy -- -D warnings
       - name: Check policy
         run: |
-          cargo install cargo-deny --vers "0.11.0"
+          version=0.11.0
+          basename=cargo-deny-$version-${{ matrix.host }}
+          curl -fLO https://github.com/EmbarkStudios/cargo-deny/releases/download/$version/$basename.tar.gz
+          tar xf $basename.tar.gz
+          mv $basename/cargo-deny /usr/local/bin/
+          rm -rf $basename $basename.tar.gz
           cargo deny check
       - name: Test
         run: |
           cargo test
+      - name: Install cargo cross
+        # Note that this will not work for Rust programs using openssl or libpq.
+        run: |
+          version=v0.2.1
+          basename=cross-$version-${{ matrix.host }}
+          curl -fLO https://github.com/rust-embedded/cross/releases/download/$version/$basename.tar.gz
+          tar xf $basename.tar.gz
+          mv $basename/cross /usr/local/bin/
+          rm -rf $basename $basename.tar.gz
       - name: Build release
         id: build_release
         run: |
-          cargo install cross
           cross build --release --target ${{ matrix.target }}
           release_file=geocode-csv-${{ matrix.target }}-${{ needs.create_release.outputs.release_version }}.zip
           zip -j $release_file target/${{ matrix.target }}/release/geocode-csv
