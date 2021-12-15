@@ -28,7 +28,7 @@ jobs:
       - name: Extract release version
         id: extract_release_version
         run: |
-          release_version="$(echo '${{ github.ref }}'
+          release_version="$(echo '${{ github.ref }}')"
           echo Release version: $release_version
           echo "::set-output name=release_version::$release_version"
       - name: Extract release body from CHANGELOG.md
