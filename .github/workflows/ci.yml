@@ -136,7 +136,7 @@ jobs:
       - name: Build release
         id: build_release
         run: |
-          release_file=geocode-csv-${{ matrix.target }}-${{ needs.create_release.outputs.release_version }}.zip
+          release_file=geocode-csv_${{ needs.create_release.outputs.release_version }}_${{ matrix.target }}.zip
           zip -j $release_file target/${{ matrix.target }}/release/geocode-csv
           echo "::set-output name=release_file::$release_file"
       - name: Upload Release Asset
