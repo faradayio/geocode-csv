@@ -1,0 +1,3 @@
+[submodule "crates/libpostal-sys/libpostal"]
+	path = crates/libpostal-sys/libpostal
+	url = git@github.com:faradayio/libpostal.git

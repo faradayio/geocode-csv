@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-alpha.1] - 2022-02-03
+
+### Added
+
+- Support for "geocoding" using `libpostal`. This returns parsed and normalized address fields, but no lat/lon data. To use this, pass `--geocoder=libpostal`.
+- Optionally normalize addresses using `libpostal` when using other geocoders.
+- We can now cache data using either Redis or BigTable.
+  - You can use `--cache-record-keys` to output the cache keys.
+- We now calculate extensive geocoding metrics, and can either print them to standard output, or send them to NewRelic.
+
+### Changed
+
+- `SMARTY_AUTH_ID` is now preferred over `SMARTYSTREETS_AUTH_ID` (though both will be supported).
+- `SMARTY_AUTH_TOKEN` is now preferred over `SMARTYSTREETS_AUTH_TOKEN` (though both will be supported).
+- `--smarty-license` is now preferred over `--license` (though both will be supported).
+
 ## [1.0.2] - 2021-12-16
 
 ### Changed

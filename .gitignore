@@ -1,2 +1,6 @@
 /target
 **/*.rs.bk
+
+# Common scratch files for manual experiments.
+/*.csv
+/*spec.json

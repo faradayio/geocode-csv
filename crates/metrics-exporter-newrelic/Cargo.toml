@@ -1,0 +1,24 @@
+[package]
+name = "metrics-exporter-newrelic"
+version = "0.1.0"
+authors = ["Eric Kidd <git@randomhacks.net>"]
+edition = "2021"
+
+description = "Basic `metrics` exporter for use with NewRelic"
+license = "Apache-2.0 OR MIT"
+readme = "README.md"
+homepage = "https://github.com/faradayio/geocode-csv/tree/main/crates/metrics-exporter-newrelic"
+repository = "https://github.com/faradayio/geocode-csv"
+documentation = "https://docs.rs/metrics-exporter-newrelic"
+
+[dependencies]
+http = "0.2.6"
+metrics = "0.18.0"
+metrics-util = "0.11.0"
+reqwest = { version = "0.11.9", default-features = false, features = ["json", "rustls-tls"] }
+serde = "1.0.136"
+serde_derive = "1.0.136"
+serde_json = "1.0.78"
+thiserror = "1.0.30"
+tokio = { version = "1.16.1", default-features = false, features = ["sync"] }
+tracing = "0.1.29"

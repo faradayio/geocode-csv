@@ -1,0 +1,18 @@
+[package]
+name = "libpostal-rust"
+version = "0.1.0"
+authors = ["Eric Kidd <git@randomhacks.net>"]
+edition = "2021"
+
+description = "High-level wrappers for libpostal address normalization (with locks to support thread-safe initialization)"
+license = "Apache-2.0 OR MIT"
+readme = "README.md"
+homepage = "https://github.com/faradayio/geocode-csv/tree/main/crates/libpostal-rust"
+repository = "https://github.com/faradayio/geocode-csv"
+documentation = "https://docs.rs/libpostal-rust"
+
+[dependencies]
+lazy_static = "1.4.0"
+libpostal-sys = { version = "0.1.0", path = "../libpostal-sys" }
+thiserror = "1.0.30"
+tracing = "0.1.29"

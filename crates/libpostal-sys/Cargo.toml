@@ -1,0 +1,26 @@
+[package]
+name = "libpostal-sys"
+version = "0.1.0"
+authors = ["Eric Kidd <git@randomhacks.net>"]
+edition = "2021"
+links = "postal"
+
+description = "Low-level wrappers for libpostal address normalization (with locks to support thread-safe initialization)"
+license = "Apache-2.0 OR MIT"
+readme = "README.md"
+homepage = "https://github.com/faradayio/geocode-csv/tree/main/crates/libpostal-sys"
+repository = "https://github.com/faradayio/geocode-csv"
+documentation = "https://docs.rs/libpostal-sys"
+
+include = ["libpostal"]
+
+[build-dependencies]
+autotools = "0.2"
+# This turns out to be pretty heavy build dependency. Better to run it once
+# manually, because we have a bundled `libpostal` that only changes when we
+# update it. See the README.md file.
+#bindgen = "0.53.1"
+
+[dependencies]
+lazy_static = "1.4.0"
+

@@ -1,13 +1,16 @@
-//! Various subsets of data potenitally returned by SmartyStreets.
+//! Various subsets of data potenitally returned by Smarty.
+//!
+//! There used to be an idea that we'd allow users to customize this, but it
+//! never happened, and it probably never will, now that we're moving to
+//! multiple backends. So this is now an implementation detail.
 
 use anyhow::format_err;
-use csv::StringRecord;
 use serde_json::{self, Map, Value};
 use std::borrow::Cow;
 
 use crate::Result;
 
-/// A subset of the fields returned by SmartyStreets.
+/// A subset of the fields returned by Smarty.
 #[derive(Debug)]
 pub struct Structure {
     /// Number of columns added.
@@ -49,47 +52,32 @@ impl Structure {
         Ok(structure)
     }
 
-    /// Given a column `prefix` and the path to a colum in our
-    /// [`structure::Structure`], return the column name we should use. This
-    /// will panic if `path` is empty, because that should be impossible.
-    fn column_name(&self, prefix: &str, path: &[&str]) -> String {
+    /// Given the path to a colum in our [`structure::Structure`], return the
+    /// column name we should use. This will panic if `path` is empty, because
+    /// that should be impossible.
+    fn column_name(&self, path: &[&str]) -> String {
         let last = path
             .last()
             .expect("should always have at least one path element");
-        format!("{}_{}", prefix, last)
+        last.to_string()
     }
 
     /// Return all the columns that this structure will add to a CSV file.
-    pub fn output_column_names(&self, prefix: &str) -> Result<Vec<String>> {
+    pub fn output_column_names(&self) -> Result<Vec<String>> {
         let mut columns = vec![];
         self.traverse(|path| {
-            let name = self.column_name(prefix, path);
+            let name = self.column_name(path);
             columns.push(name);
             Ok(())
         })?;
         Ok(columns)
     }
 
-    /// Add the column names specified in this `Structure` to a CSV header row.
-    pub fn add_header_columns(
-        &self,
-        prefix: &str,
-        header: &mut StringRecord,
-    ) -> Result<()> {
-        self.traverse(|path| {
-            header.push_field(&self.column_name(prefix, path));
-            Ok(())
-        })
-    }
-
     /// Extract fields from `data` and merge them into `row`.
     ///
     /// PERFORMANCE: This is probably slower than it should be in a hot loop.
-    pub fn add_value_columns_to_row(
-        &self,
-        data: &Value,
-        row: &mut StringRecord,
-    ) -> Result<()> {
+    pub fn value_columns_for(&self, data: &Value) -> Result<Vec<String>> {
+        let mut result = vec![];
         self.traverse(|path| {
             // Follow `path`.
             let mut focus = data;
@@ -98,7 +86,7 @@ impl Structure {
                     focus = value;
                 } else {
                     // No value present, so push an empty field.
-                    row.push_field("");
+                    result.push("".to_owned());
                     return Ok(());
                 }
             }
@@ -117,21 +105,13 @@ impl Structure {
                     ));
                 }
             };
-            row.push_field(&formatted);
+            result.push(formatted.into_owned());
             Ok(())
-        })
+        })?;
+        Ok(result)
     }
 
-    /// Add empty columns to the row. We call this when we couldn't geocode an
-    /// address.
-    pub fn add_empty_columns_to_row(&self, row: &mut StringRecord) -> Result<()> {
-        self.traverse(|_path| {
-            row.push_field("");
-            Ok(())
-        })
-    }
-
-    /// Generic SmartyStreets result traverser. Calls `f` with the path to
+    /// Generic Smarty result traverser. Calls `f` with the path to
     /// each key present in this `Structure`.
     fn traverse<F>(&self, mut f: F) -> Result<()>
     where
@@ -175,74 +155,66 @@ impl Structure {
 }
 
 #[test]
-fn add_header_columns() {
-    use std::iter::FromIterator;
-
+fn output_column_names() {
     let structure = Structure::complete().unwrap();
-    let mut header = StringRecord::from_iter(&["existing"]);
-    structure.add_header_columns("x", &mut header).unwrap();
-    let expected = StringRecord::from_iter(
-        &[
-            "existing",
-            "x_addressee",
-            "x_delivery_line_1",
-            "x_delivery_line_2",
-            "x_last_line",
-            "x_delivery_point_barcode",
-            "x_urbanization",
-            "x_primary_number",
-            "x_street_name",
-            "x_street_predirection",
-            "x_street_postdirection",
-            "x_street_suffix",
-            "x_secondary_number",
-            "x_secondary_designator",
-            "x_extra_secondary_number",
-            "x_extra_secondary_designator",
-            "x_pmb_designator",
-            "x_pmb_number",
-            "x_city_name",
-            "x_default_city_name",
-            "x_state_abbreviation",
-            "x_zipcode",
-            "x_plus4_code",
-            "x_delivery_point",
-            "x_delivery_point_check_digit",
-            "x_record_type",
-            "x_zip_type",
-            "x_county_fips",
-            "x_county_name",
-            "x_carrier_route",
-            "x_congressional_district",
-            "x_building_default_indicator",
-            "x_rdi",
-            "x_elot_sequence",
-            "x_elot_sort",
-            "x_latitude",
-            "x_longitude",
-            "x_precision",
-            "x_time_zone",
-            "x_utc_offset",
-            "x_dst",
-            "x_dpv_match_code",
-            "x_dpv_footnotes",
-            "x_dpv_cmra",
-            "x_dpv_vacant",
-            "x_active",
-            "x_ews_match",
-            "x_footnotes",
-            "x_lacslink_code",
-            "x_lacslink_indicator",
-            "x_suitelink_match",
-        ][..],
-    );
-    assert_eq!(header, expected);
+    let column_names = structure.output_column_names().unwrap();
+    let expected = &[
+        "addressee",
+        "delivery_line_1",
+        "delivery_line_2",
+        "last_line",
+        "delivery_point_barcode",
+        "urbanization",
+        "primary_number",
+        "street_name",
+        "street_predirection",
+        "street_postdirection",
+        "street_suffix",
+        "secondary_number",
+        "secondary_designator",
+        "extra_secondary_number",
+        "extra_secondary_designator",
+        "pmb_designator",
+        "pmb_number",
+        "city_name",
+        "default_city_name",
+        "state_abbreviation",
+        "zipcode",
+        "plus4_code",
+        "delivery_point",
+        "delivery_point_check_digit",
+        "record_type",
+        "zip_type",
+        "county_fips",
+        "county_name",
+        "carrier_route",
+        "congressional_district",
+        "building_default_indicator",
+        "rdi",
+        "elot_sequence",
+        "elot_sort",
+        "latitude",
+        "longitude",
+        "precision",
+        "time_zone",
+        "utc_offset",
+        "dst",
+        "dpv_match_code",
+        "dpv_footnotes",
+        "dpv_cmra",
+        "dpv_vacant",
+        "active",
+        "ews_match",
+        "footnotes",
+        "lacslink_code",
+        "lacslink_indicator",
+        "suitelink_match",
+    ][..];
+    assert_eq!(column_names, expected);
 }
 
 #[test]
-fn add_value_columns() {
-    use std::iter::FromIterator;
-
+fn value_columns_for() {
     let structure = Structure::complete().unwrap();
 
     let data: Value = serde_json::from_str(
@@ -255,62 +227,58 @@ fn add_value_columns() {
     )
     .unwrap();
 
-    let mut row = StringRecord::from_iter(&["existing"]);
-    structure.add_value_columns_to_row(&data, &mut row).unwrap();
-    let expected = StringRecord::from_iter(
-        &[
-            "existing",
-            "ACME, Inc.",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "Zip5",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-        ][..],
-    );
+    let row = structure.value_columns_for(&data).unwrap();
+    let expected = &[
+        "ACME, Inc.",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Zip5",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+    ][..];
     assert_eq!(row, expected);
 }
