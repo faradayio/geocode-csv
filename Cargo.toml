@@ -34,7 +34,7 @@ serde = { version = "1.0.92", features = ["derive"] }
 # specifications in a way that puts the right data in the right output columns.
 serde_json = { version = "1.0.39", features = ["preserve_order"] }
 sha2 = "0.10.1"
-structopt = "0.3.4"
+structopt = { version = "0.3.4", features = ["wrap_help"] }
 strum = "0.23.0"
 strum_macros = "0.23.1"
 tokio = { version = "1.6.0", features = ["io-util", "macros", "rt-multi-thread", "sync"] }

@@ -32,7 +32,7 @@ pub struct Cache {
     inner_cache_prefix: String,
 
     /// Should we record our cache keys in our output?
-    record_keys: bool,
+    output_keys: bool,
 
     /// The column names we output.
     column_names: Vec<String>,
@@ -44,7 +44,7 @@ impl Cache {
     pub async fn new(
         key_value_store: Box<dyn KeyValueStore>,
         inner: Box<dyn Geocoder>,
-        record_keys: bool,
+        output_keys: bool,
     ) -> Result<Cache> {
         describe_counter!("geocodecsv.cache_hits.total", "Addresses found in cache");
         describe_counter!(
@@ -54,7 +54,7 @@ impl Cache {
 
         let inner_cache_prefix = inner.cache_prefix();
         let mut column_names = inner.column_names().to_owned();
-        if record_keys {
+        if output_keys {
             column_names.push("cache_key".to_owned());
         }
 
@@ -63,7 +63,7 @@ impl Cache {
             key_value_store,
             inner,
             inner_cache_prefix,
-            record_keys,
+            output_keys,
             column_names,
         })
     }
@@ -204,7 +204,7 @@ impl Geocoder for Cache {
         }
 
         // Output our cache key, too, if we were asked to do so.
-        if self.record_keys {
+        if self.output_keys {
             debug_assert_eq!(geocoded.len(), keys.len());
             for (result, key) in geocoded.iter_mut().zip(keys.iter()) {
                 if let Some(result) = result {

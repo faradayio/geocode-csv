@@ -115,8 +115,8 @@ struct Opt {
     cache_url: Option<Url>,
 
     /// Include cache keys in the output. Mostly useful for debugging.
-    #[structopt(long = "cache-record-keys")]
-    cache_record_keys: bool,
+    #[structopt(long = "cache-output-keys")]
+    cache_output_keys: bool,
 
     /// Extra prefix to use for cache keys. Should typically end with ":".
     #[structopt(long = "cache-key-prefix", requires = "cache_url")]
@@ -179,7 +179,7 @@ async fn main() -> Result<()> {
             <dyn KeyValueStore>::new_from_url(cache_url.to_owned(), cache_key_prefix)
                 .await?;
         geocoder = Box::new(
-            Cache::new(key_value_store, geocoder, opt.cache_record_keys).await?,
+            Cache::new(key_value_store, geocoder, opt.cache_output_keys).await?,
         );
     }
 
