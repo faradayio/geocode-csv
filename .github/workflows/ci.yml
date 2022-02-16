@@ -87,6 +87,11 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
+      # See https://github.com/r-lib/actions/issues/243
+      - name: Install automake
+        if: runner.os == 'macOS'
+        run: |
+          brew install automake
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
