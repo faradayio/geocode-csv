@@ -27,6 +27,9 @@ hyper-rustls = { version = "0.23.0", features = ["rustls-native-certs", "http2"]
 libpostal-rust = { version = "0.1.0", path = "crates/libpostal-rust" }
 metrics = "0.18.0"
 metrics-util = "0.11.0"
+# Force OpenSSL to build as part of this binary. This gives us a fighting chance
+# of working without ekidd/rust-musl-builder.
+openssl = { version = "0.10", features = ["vendored"] }
 opinionated_metrics = { version = "0.1.0", path = "crates/opinionated_metrics" }
 redis = { version = "0.21.5", default-features = false, features = ["aio", "tokio-comp"] }
 serde = { version = "1.0.92", features = ["derive"] }
