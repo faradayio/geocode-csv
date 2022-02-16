@@ -98,6 +98,8 @@ jobs:
           target: ${{ matrix.target }}
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
+        with:
+          submodules: recursive
       - name: Check source formatting and warnings
         run: |
           cargo fmt -- --check
