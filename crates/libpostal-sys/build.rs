@@ -4,8 +4,6 @@
 //! version, because this is a fairly obscure library and it's not availble even
 //! as an Ubuntu PPE.
 
-use std::path::Path;
-
 /// The main entry point to our build script.
 fn main() {
     build_libpostal();
@@ -17,10 +15,14 @@ fn build_libpostal() {
     // Build `libpostal` and install it in `$OUT_DIR`.
     let mut config = autotools::Config::new("libpostal");
 
-    if !Path::new("libpostal/configure").exists() {
-        // Build `./configure` if it doesn't exist.
-        config.reconf("-fi");
-    }
+    // Instead of doing this, we ran `./bootstrap.sh` in `libpostal` manually,
+    // and committed the output. This helps guarantee our source tree never
+    // changes during `cargo publish`.
+    //
+    // if !Path::new("libpostal/configure").exists() {
+    //     // Build `./configure` if it doesn't exist.
+    //     config.reconf("-fi");
+    // }
 
     let dst = config
         // You'll need to edit any `-Wall` out of the source tree,
@@ -29,6 +31,11 @@ fn build_libpostal() {
         // You'll need to download this manually and stick it in
         // `/usr/local/shared` or wherever the library expects it.
         .disable("data-download", None)
+        // Don't allow automake, etc., to re-run. If this is allowed, it will
+        // cause the input source tree to change and cause `cargo` to abort
+        // publishing process. This required us to add `AM_MAINTAINER_MODE` to
+        // `libpostal/configure.ac`.
+        .disable("maintainer-mode", None)
         .config_option("datadir", Some("/usr/local/share/libpostal"))
         .build();
 

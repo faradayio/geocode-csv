@@ -12,7 +12,11 @@ homepage = "https://github.com/faradayio/geocode-csv/tree/main/crates/libpostal-
 repository = "https://github.com/faradayio/geocode-csv"
 documentation = "https://docs.rs/libpostal-sys"
 
-include = ["libpostal"]
+exclude = [
+    # Autotools cache that appears in the main source tree. We don't want it in
+    # our builds, and it tends to break `cargo` "changed tree" detection.
+    "/libpostal/autom4te.cache/"
+]
 
 [build-dependencies]
 autotools = "0.2"
