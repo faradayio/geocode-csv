@@ -1,8 +1,8 @@
-# `geocode-csv`: Geocode a CSV file using the SmartyStreets API
+# `geocode-csv`: Geocode a CSV file using libpostal or the Smarty API
 
-(This project is not associated with [SmartyStreets][].)
+(This project is not associated with [Smarty][].)
 
-**WARNING: This project geocodes CSV files thousands of rows per second, which can use up your SmartyStreets quota very quickly.** This may cost you money.
+**WARNING: This project geocodes CSV files thousands of rows per second, which can use up your Smarty quota very quickly.** This may cost you money.
 
 If you have a CSV file that appears as follows:
 
@@ -28,8 +28,8 @@ Resident,1600 Pennsylvania Avenue NW,,Washington DC,20500
 
 ```sh
 # Set up credentials.
-export SMARTYSTREETS_AUTH_ID=...
-export SMARTYSTREETS_AUTH_TOKEN=...
+export SMARTY_AUTH_ID=...
+export SMARTY_AUTH_TOKEN=...
 
 # Geocode the CSV.
 geocode-csv --spec address_spec.json < in.csv > out.csv
@@ -60,4 +60,4 @@ We provide pre-built Mac binaries for Intel- and M1-based Macs. These binaries u
 xattr -d com.apple.quarantine geocode-csv
 ```
 
-[smartystreets]: https://smartystreets.com/
+[smarty]: https://smarty.com/

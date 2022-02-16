@@ -10,7 +10,7 @@ unlicensed = "deny"
 copyleft = "deny"
 
 # Allow common non-restrictive licenses.
-allow = ["MIT", "Apache-2.0", "CC0-1.0", "ISC", "OpenSSL"]
+allow = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "CC0-1.0", "ISC", "MPL-2.0", "OpenSSL"]
 
 # Many organizations ban AGPL-licensed code
 # https://opensource.google/docs/using/agpl-policy/
@@ -25,13 +25,22 @@ license-files = [
     { path = "LICENSE", hash = 3171872035 },
 ]
 
+[[licenses.clarify]]
+name = "encoding_rs"
+expression = "(MIT OR Apache-2.0) AND BSD-3-Clause AND CC0-1.0"
+license-files = [
+    { path = "COPYRIGHT", hash = 972598577 },
+]
+
 [bans]
 # Warn about multiple versions of the same crate, unless we've indicated otherwise below.
 multiple-versions = "warn"
 
 deny = [
-    # This never causes anything but portability misery.
-    { name = "openssl-sys" },
+    # This never causes anything but portability misery. But we currently need
+    # it for bigtable_rs.
+    #
+    # { name = "openssl-sys" },
 ]
 
 skip = [
@@ -41,6 +50,9 @@ skip = [
     { name = "itoa", version = "0.4.8" },
 ]
 
-skip-tree = []
+skip-tree = [
+    # This has a bunch of old dependencies.
+    { name = "bigtable_rs" }
+]
 
 

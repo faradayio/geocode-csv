@@ -3,25 +3,80 @@
 
 #![recursion_limit = "128"]
 
-use anyhow::Error;
 pub use anyhow::Result;
-use futures::FutureExt;
-use std::{path::PathBuf, process::exit};
+use anyhow::{format_err, Error};
+use geocoders::cache::Cache;
+use geocoders::libpostal::LibPostal;
+use geocoders::normalizer::Normalizer;
+use geocoders::smarty::Smarty;
+use geocoders::{shared_http_client, Geocoder};
+use key_value_stores::KeyValueStore;
+use opinionated_metrics::Mode;
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::Arc;
 use structopt::StructOpt;
+use tracing::{debug, info_span, warn};
+use tracing_subscriber::{
+    fmt::{format::FmtSpan, Subscriber},
+    prelude::*,
+    EnvFilter,
+};
+use url::Url;
 
 mod addresses;
 mod async_util;
 mod errors;
-mod geocoder;
-mod smartystreets;
-mod structure;
+mod geocoders;
+mod key_value_stores;
+mod pipeline;
 mod unpack_vec;
 
 use crate::addresses::AddressColumnSpec;
-use crate::errors::display_causes_and_backtrace;
-use crate::geocoder::{geocode_stdio, OnDuplicateColumns};
-use crate::smartystreets::MatchStrategy;
-use crate::structure::Structure;
+use crate::geocoders::MatchStrategy;
+use crate::pipeline::{geocode_stdio, OnDuplicateColumns, CONCURRENCY};
+
+/// Underlying geocoders we can use. (Helper struct for argument parsing.)
+#[derive(Clone, Copy, Debug)]
+enum GeocoderName {
+    Smarty,
+    LibPostal,
+}
+
+impl FromStr for GeocoderName {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "smarty" => Ok(GeocoderName::Smarty),
+            "libpostal" => Ok(GeocoderName::LibPostal),
+            _ => Err(format_err!("unknown geocoder {:?}", s)),
+        }
+    }
+}
+
+/// Key/value pairs used to annotate reported metrics. These are of the form
+/// `KEY=VALUE`. (Helper struct for argument parsing.)
+#[derive(Debug)]
+struct MetricsLabel {
+    key: String,
+    value: String,
+}
+
+impl FromStr for MetricsLabel {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        if let Some((key, value)) = s.split_once('=') {
+            Ok(MetricsLabel {
+                key: key.to_owned(),
+                value: value.to_owned(),
+            })
+        } else {
+            Err(format_err!("expected \"key=value\", found {:?}", s))
+        }
+    }
+}
 
 /// Our command-line arguments.
 #[derive(Debug, StructOpt)]
@@ -29,7 +84,7 @@ use crate::structure::Structure;
 struct Opt {
     /// `strict` for valid postal addresses only, `range` for unknown addresses
     /// within a street's known range, `invalid` to always generate some
-    /// match, and `enhanced` if you've paid for it.
+    /// match, and `enhanced` (Smarty-only) if you've paid for it.
     #[structopt(long = "match", default_value = "strict")]
     match_strategy: MatchStrategy,
 
@@ -42,39 +97,105 @@ struct Opt {
     #[structopt(long = "spec")]
     spec_path: PathBuf,
 
+    /// The geocoder to use.
+    #[structopt(long = "geocoder", default_value = "smarty", possible_values = &["smarty", "libpostal"])]
+    geocoder: GeocoderName,
+
     /// What license to use. Leave blank for standard, `us-rooftop-geocoding-enterprise-cloud` for Rooftop.
-    #[structopt(long = "license", default_value = "us-standard-cloud")]
-    license: String,
+    #[structopt(
+        long = "smarty-license",
+        alias = "license",
+        default_value = "us-standard-cloud"
+    )]
+    smarty_license: String,
+
+    /// Cache geocoding results in the specified location (either redis: or
+    /// bigtable:).
+    #[structopt(long = "cache", value_name = "CACHE_URL")]
+    cache_url: Option<Url>,
+
+    /// Include cache keys in the output. Mostly useful for debugging.
+    #[structopt(long = "cache-output-keys")]
+    cache_output_keys: bool,
+
+    /// Extra prefix to use for cache keys. Should typically end with ":".
+    #[structopt(long = "cache-key-prefix", requires = "cache_url")]
+    cache_key_prefix: Option<String>,
+
+    /// Before processing addresses, normalize them using libpostal.
+    #[structopt(long = "normalize")]
+    normalize: bool,
+
+    /// Labels to attach to reported metrics. Recommended: "source=$SOURCE".
+    #[structopt(long = "metrics-label", value_name = "KEY=VALUE")]
+    metrics_labels: Vec<MetricsLabel>,
 }
 
-fn main() {
-    // Set up basic logging.
-    env_logger::init();
+// Our main entrypoint. We rely on the fact that `anyhow::Error` has a `Debug`
+// implementation that will print a nice friendly error if we return from `main`
+// with an error.
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Configure tracing.
+    let filter = EnvFilter::from_default_env();
+    Subscriber::builder()
+        .with_writer(std::io::stderr)
+        .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+        .with_env_filter(filter)
+        .finish()
+        .init();
+    let _span = info_span!("geocode-csv").entered();
+    debug!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
-    if let Err(err) = run() {
-        display_causes_and_backtrace(&err);
-        exit(1);
-    }
-}
-
-/// Our main entry point.
-fn run() -> Result<()> {
     // Parse our command-line arguments.
     let opt = Opt::from_args();
     let spec = AddressColumnSpec::from_path(&opt.spec_path)?;
-    let structure = Structure::complete()?;
 
-    // Call our geocoder asynchronously.
-    let geocode_fut = geocode_stdio(
-        spec,
-        opt.match_strategy,
-        opt.license,
-        opt.on_duplicate_columns,
-        structure,
-    );
+    // Set up metrics recording.
+    let mut metrics_builder = opinionated_metrics::Builder::new(Mode::Cli);
+    for label in &opt.metrics_labels {
+        metrics_builder = metrics_builder.add_global_label(&label.key, &label.value);
+    }
+    let metrics_handle = metrics_builder.install()?;
 
-    // Pass our future to our async runtime.
-    let runtime = tokio::runtime::Runtime::new().expect("Unable to create a runtime");
-    runtime.block_on(geocode_fut.boxed())?;
-    Ok(())
+    // Choose our main geocoding client.
+    let mut geocoder: Box<dyn Geocoder> = match opt.geocoder {
+        GeocoderName::Smarty => Box::new(Smarty::new(
+            opt.match_strategy,
+            opt.smarty_license.clone(),
+            shared_http_client(CONCURRENCY),
+        )?),
+        GeocoderName::LibPostal => Box::new(LibPostal::new()),
+    };
+
+    // If we were asked, place a cache in front.
+    if let Some(cache_url) = &opt.cache_url {
+        let cache_key_prefix = opt
+            .cache_key_prefix
+            .as_deref()
+            .unwrap_or_default()
+            .to_owned();
+        let key_value_store =
+            <dyn KeyValueStore>::new_from_url(cache_url.to_owned(), cache_key_prefix)
+                .await?;
+        geocoder = Box::new(
+            Cache::new(key_value_store, geocoder, opt.cache_output_keys).await?,
+        );
+    }
+
+    // If we were asked, normalize addresses a bit first.
+    if opt.normalize {
+        geocoder = Box::new(Normalizer::new(geocoder));
+    }
+
+    // Call our geocoder.
+    let result =
+        geocode_stdio(spec, Arc::from(geocoder), opt.on_duplicate_columns).await;
+
+    // Report our metrics.
+    if let Err(err) = metrics_handle.report().await {
+        warn!("could not report metrics: {:?}", err);
+    }
+
+    result
 }

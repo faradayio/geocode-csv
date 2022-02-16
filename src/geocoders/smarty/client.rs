@@ -1,25 +1,22 @@
-//! Interface to SmartyStreets REST API.
+//! Interface to Smarty REST API.
+
+use std::time::Instant;
+use std::{env, str};
 
 use anyhow::{format_err, Context};
 use futures::stream::StreamExt;
-use hyper::{client::HttpConnector, Body, Client, Request};
-use hyper_rustls::HttpsConnector;
+use hyper::{Body, Request};
+use metrics::{describe_histogram, histogram, Unit};
 use serde::{Deserialize, Serialize};
-use std::{
-    env,
-    str::{self, FromStr},
-    sync::Arc,
-};
+use tracing::instrument;
 use url::Url;
 
 use crate::addresses::Address;
+use crate::geocoders::{MatchStrategy, SharedHttpClient};
 use crate::unpack_vec::unpack_vec;
-use crate::{Error, Result};
+use crate::Result;
 
-/// A `hyper` client shared between multiple workers.
-pub type SharedHyperClient = Arc<Client<HttpsConnector<HttpConnector>>>;
-
-/// Credentials for authenticating with SmartyStreets.
+/// Credentials for authenticating with Smarty.
 #[derive(Debug, Clone)]
 pub struct Credentials {
     auth_id: String,
@@ -27,12 +24,14 @@ pub struct Credentials {
 }
 
 impl Credentials {
-    /// Create new SmartyStreets credentials from environment variables.
+    /// Create new Smarty credentials from environment variables.
     fn from_env() -> Result<Credentials> {
-        let auth_id = env::var("SMARTYSTREETS_AUTH_ID")
-            .context("could not read SMARTYSTREETS_AUTH_ID")?;
-        let auth_token = env::var("SMARTYSTREETS_AUTH_TOKEN")
-            .context("could not read SMARTYSTREETS_AUTH_TOKEN")?;
+        let auth_id = env::var("SMARTY_AUTH_ID")
+            .or_else(|_| env::var("SMARTYSTREETS_AUTH_ID"))
+            .context("could not read SMARTY_AUTH_ID")?;
+        let auth_token = env::var("SMARTY_AUTH_TOKEN")
+            .or_else(|_| env::var("SMARTYSTREETS_AUTH_TOKEN"))
+            .context("could not read SMARTY_AUTH_TOKEN")?;
         Ok(Credentials {
             auth_id,
             auth_token,
@@ -40,44 +39,7 @@ impl Credentials {
     }
 }
 
-/// What match candidates should we output when geocoding?
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MatchStrategy {
-    /// Only match valid USPS addresses.
-    Strict,
-    /// Match addresses that are within the known range on a street,
-    /// but which are not valid USPS addresses.
-    Range,
-    /// Return a candidate for every address.
-    Invalid,
-    /// Use "enhanced" matching (which you pay extra for)
-    Enhanced,
-}
-
-impl Default for MatchStrategy {
-    fn default() -> Self {
-        MatchStrategy::Strict
-    }
-}
-
-impl FromStr for MatchStrategy {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        // Do this manually instead of including another library to generate it,
-        // or quoting values and parsing them with `serde_json`.
-        match s {
-            "strict" => Ok(MatchStrategy::Strict),
-            "range" => Ok(MatchStrategy::Range),
-            "invalid" => Ok(MatchStrategy::Invalid),
-            "enhanced" => Ok(MatchStrategy::Enhanced),
-            _ => Err(format_err!("unknown match strategy {:?}", s)),
-        }
-    }
-}
-
-/// A SmartyStreets address request.
+/// A Smarty address request.
 #[derive(Clone, Debug, Serialize)]
 pub struct AddressRequest {
     /// The address to geocode.
@@ -89,35 +51,47 @@ pub struct AddressRequest {
     pub match_strategy: MatchStrategy,
 }
 
-/// A SmartyStreets address response.
+/// A Smarty address response.
 #[derive(Clone, Debug, Deserialize)]
 pub struct AddressResponse {
     /// The index of the corresponding `AddressRequest`.
     pub input_index: usize,
 
-    /// Fields returned by SmartyStreets. We could actually represent this as
+    /// Fields returned by Smarty. We could actually represent this as
     /// serveral large structs with known fields, and it would probably be
     /// faster, but this way requires less code for now.
     #[serde(flatten)]
     pub fields: serde_json::Value,
 }
 
-/// The real implementation of `SmartyStreetsApi`.
-pub struct SmartyStreets {
+/// The real implementation of `S.
+pub struct SmartyClient {
     credentials: Credentials,
-    client: SharedHyperClient,
+    client: SharedHttpClient,
 }
 
-impl SmartyStreets {
-    /// Create a new SmartyStreets client.
-    pub fn new(client: SharedHyperClient) -> Result<SmartyStreets> {
-        Ok(SmartyStreets {
+impl SmartyClient {
+    /// Create a new Smarty client.
+    pub fn new(client: SharedHttpClient) -> Result<SmartyClient> {
+        describe_histogram!(
+            "geocodecsv.smart.geocode_request.duration_seconds",
+            Unit::Seconds,
+            "Time required for Smarty to geocode a batch of rows"
+        );
+
+        Ok(SmartyClient {
             credentials: Credentials::from_env()?,
             client,
         })
     }
 
-    /// Geocode addresses using SmartyStreets.
+    /// Geocode addresses using Smarty.
+    #[instrument(
+        name = "SmartyClient::street_addresses",
+        level="debug",
+        skip_all,
+        fields(addresses.len = requests.len())
+    )]
     pub async fn street_addresses(
         &self,
         requests: Vec<AddressRequest>,
@@ -133,12 +107,15 @@ impl SmartyStreets {
     }
 }
 
+/// The real implementation of `street_addresses`.
 async fn street_addresses_impl(
     credentials: Credentials,
-    client: SharedHyperClient,
+    client: SharedHttpClient,
     requests: Vec<AddressRequest>,
     license: String,
 ) -> Result<Vec<Option<AddressResponse>>> {
+    let start = Instant::now();
+
     // Build our URL.
     let mut url = Url::parse("https://api.smartystreets.com/street-address")?;
     url.query_pairs_mut()
@@ -161,6 +138,11 @@ async fn street_addresses_impl(
         let chunk = chunk_result?;
         body_data.extend(&chunk[..]);
     }
+
+    histogram!(
+        "geocodecsv.smarty.geocode_request.duration_seconds",
+        (Instant::now() - start).as_secs_f64(),
+    );
 
     // Check the request status.
     if status.is_success() {

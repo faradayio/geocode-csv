@@ -3,32 +3,28 @@
 use anyhow::{format_err, Context, Error};
 use csv::{self, StringRecord};
 use futures::{executor::block_on, future, FutureExt, StreamExt};
-use hyper::Client;
-use hyper_rustls::HttpsConnectorBuilder;
-use log::{debug, error, trace, warn};
+use metrics::{counter, describe_counter};
 use std::{
     cmp::max, io, iter::FromIterator, sync::Arc, thread::sleep, time::Duration,
 };
 use strum_macros::EnumString;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio_stream::wrappers::ReceiverStream;
+use tracing::{debug, error, instrument, trace, warn};
 
 use crate::addresses::AddressColumnSpec;
 use crate::async_util::run_sync_fn_in_background;
 use crate::errors::display_causes_and_backtrace;
-use crate::smartystreets::{
-    AddressRequest, MatchStrategy, SharedHyperClient, SmartyStreets,
-};
-use crate::structure::Structure;
+use crate::geocoders::Geocoder;
 use crate::Result;
 
 /// The number of chunks to buffer on our internal channels.
 const CHANNEL_BUFFER: usize = 8;
 
 /// The number of concurrent workers to run.
-const CONCURRENCY: usize = 48;
+pub const CONCURRENCY: usize = 48;
 
-/// The number of addresses to pass to SmartyStreets at one time.
+/// The number of addresses to pass to our geocoder at one time.
 const GEOCODE_SIZE: usize = 72;
 
 /// What should we do if a geocoding output column has the same as a column in
@@ -48,8 +44,6 @@ pub enum OnDuplicateColumns {
 struct Shared {
     /// Which columns contain addresses that we need to geocode?
     spec: AddressColumnSpec<usize>,
-    /// Which SmartyStreets outputs do we want to store in our output?
-    structure: Structure,
     /// The header of the output CSV file.
     out_headers: StringRecord,
 }
@@ -76,11 +70,20 @@ enum Message {
 /// output.
 pub async fn geocode_stdio(
     spec: AddressColumnSpec<String>,
-    match_strategy: MatchStrategy,
-    license: String,
+    geocoder: Arc<dyn Geocoder>,
     on_duplicate_columns: OnDuplicateColumns,
-    structure: Structure,
 ) -> Result<()> {
+    describe_counter!("geocodecsv.addresses.total", "Total addresses processed");
+    describe_counter!("geocodecsv.chunks.total", "Total address chunks processed");
+    describe_counter!(
+        "geocodecsv.chunks_retried.total",
+        "Total address chunks retried"
+    );
+    describe_counter!(
+        "geocodecsv.chunks_failed.total",
+        "total address chunks that failed after all retries"
+    );
+
     // Set up bounded channels for communication between the sync and async
     // worlds.
     let (in_tx, in_rx) = mpsc::channel::<Message>(CHANNEL_BUFFER);
@@ -88,40 +91,22 @@ pub async fn geocode_stdio(
 
     // Hook up our inputs and outputs, which are synchronous functions running
     // in their own threads.
+    let geocoder2 = geocoder.clone();
     let read_fut = run_sync_fn_in_background("read CSV".to_owned(), move || {
-        read_csv_from_stdin(spec, structure, on_duplicate_columns, in_tx)
+        read_csv_from_stdin(spec, geocoder2.as_ref(), on_duplicate_columns, in_tx)
     });
     let write_fut = run_sync_fn_in_background("write CSV".to_owned(), move || {
         write_csv_to_stdout(out_rx)
     });
 
-    // Create a shared `hyper::Client` with a connection pool, so that we can
-    // use keep-alive.
-    let client = Arc::new(
-        Client::builder().pool_max_idle_per_host(CONCURRENCY).build(
-            HttpsConnectorBuilder::new()
-                .with_native_roots()
-                .https_only()
-                .enable_http2()
-                .build(),
-        ),
-    );
-
     // Geocode each chunk that we see, with up to `CONCURRENCY` chunks being
     // geocoded at a time.
     let geocode_fut = async move {
+        let geocoder = geocoder.clone();
         let in_rx = ReceiverStream::new(in_rx);
         let mut stream = in_rx
             // Turn input messages into futures that yield output messages.
-            .map(move |message| {
-                geocode_message(
-                    client.clone(),
-                    match_strategy,
-                    license.clone(),
-                    message,
-                )
-                .boxed()
-            })
+            .map(move |message| geocode_message(geocoder.clone(), message).boxed())
             // Turn output message futures into output messages in parallel.
             .buffered(CONCURRENCY);
 
@@ -175,7 +160,7 @@ pub async fn geocode_stdio(
 /// Read a CSV file and write it as messages to `tx`.
 fn read_csv_from_stdin(
     spec: AddressColumnSpec<String>,
-    structure: Structure,
+    geocoder: &dyn Geocoder,
     on_duplicate_columns: OnDuplicateColumns,
     tx: Sender<Message>,
 ) -> Result<()> {
@@ -187,7 +172,7 @@ fn read_csv_from_stdin(
 
     // Figure out if we have any duplicate columns.
     let (duplicate_column_indices, duplicate_column_names) = {
-        let duplicate_columns = spec.duplicate_columns(&structure, &in_headers)?;
+        let duplicate_columns = spec.duplicate_columns(geocoder, &in_headers)?;
         let indices = duplicate_columns
             .iter()
             .map(|name_idx| name_idx.1)
@@ -240,21 +225,17 @@ fn read_csv_from_stdin(
     // Decide how big to make our chunks. We want to geocode no more
     // `GEOCODE`-size addresses at a time, and each input row may generate up to
     // `spec.prefix_count()` addresses.
-    let chunk_size = max(1, GEOCODE_SIZE / spec.prefix_count());
+    let chunk_size = max(1, GEOCODE_SIZE / max(spec.prefix_count(), 1));
 
     // Build our output headers.
     let mut out_headers = in_headers;
     for prefix in spec.prefixes() {
-        structure.add_header_columns(prefix, &mut out_headers)?;
+        geocoder.add_header_columns(prefix, &mut out_headers);
     }
     debug!("output headers: {:?}", out_headers);
 
     // Build our shared CSV file metadata, and wrap it with a reference count.
-    let shared = Arc::new(Shared {
-        spec,
-        structure,
-        out_headers,
-    });
+    let shared = Arc::new(Shared { spec, out_headers });
 
     // Group up the rows into chunks and send them to `tx`.
     let mut sent_chunk = false;
@@ -354,16 +335,14 @@ fn write_csv_to_stdout(rx: Receiver<Message>) -> Result<()> {
 
 /// Geocode a `Message`. This is just a wrapper around `geocode_chunk`.
 async fn geocode_message(
-    client: SharedHyperClient,
-    match_strategy: MatchStrategy,
-    license: String,
+    geocoder: Arc<dyn Geocoder>,
     message: Message,
 ) -> Result<Message> {
     match message {
         Message::Chunk(chunk) => {
             trace!("geocoding {} rows", chunk.rows.len());
             Ok(Message::Chunk(
-                geocode_chunk(client, match_strategy, license, chunk).await?,
+                geocode_chunk(geocoder.as_ref(), chunk).await?,
             ))
         }
         Message::EndOfStream => {
@@ -374,12 +353,12 @@ async fn geocode_message(
 }
 
 /// Geocode a `Chunk`.
-async fn geocode_chunk(
-    client: SharedHyperClient,
-    match_strategy: MatchStrategy,
-    license: String,
-    mut chunk: Chunk,
-) -> Result<Chunk> {
+#[instrument(
+    level="debug",
+    skip_all,
+    fields(rows = chunk.rows.len())
+)]
+async fn geocode_chunk(geocoder: &dyn Geocoder, mut chunk: Chunk) -> Result<Chunk> {
     // Build a list of addresses to geocode.
     let prefixes = chunk.shared.spec.prefixes();
     let mut addresses = vec![];
@@ -390,16 +369,10 @@ async fn geocode_chunk(
             .get(prefix)
             .expect("should always have prefix");
         for row in &chunk.rows {
-            addresses.push(AddressRequest {
-                address: column_keys.extract_address_from_record(row)?,
-                match_strategy,
-            });
+            addresses.push(column_keys.extract_address_from_record(row)?);
         }
     }
     let addresses_len = addresses.len();
-
-    // Create a SmartyStreets client.
-    let smartystreets = SmartyStreets::new(client)?;
 
     // Geocode our addresses.
     //
@@ -409,23 +382,25 @@ async fn geocode_chunk(
     let geocoded = loop {
         // TODO: The `clone` here is expensive. We might want to move the
         // `retry` loop inside of `street_addresses`.
-        let result = smartystreets
-            .street_addresses(addresses.clone(), license.clone())
-            .await;
+        let result = geocoder.geocode_addresses(&addresses).await;
         match result {
             Err(ref err) if failures < 5 => {
                 failures += 1;
-                debug!("retrying smartystreets error: {}", err);
+                debug!("retrying geocoder error: {:?}", err);
+                counter!("geocodecsv.chunks_retried.total", 1);
                 sleep(Duration::from_secs(2));
             }
             Err(err) => {
-                return Err(err).context("smartystreets error");
+                counter!("geocodecsv.chunks_failed.total", 1);
+                return Err(err).context("geocoder error");
             }
             Ok(geocoded) => {
+                counter!("geocodecsv.chunks.total", 1);
                 break geocoded;
             }
         }
     };
+    counter!("geocodecsv.addresses.total", addresses_len as u64);
     trace!("geocoded {} addresses", addresses_len);
 
     // Add address information to our output rows.
@@ -433,12 +408,9 @@ async fn geocode_chunk(
         assert_eq!(geocoded_for_prefix.len(), chunk.rows.len());
         for (response, row) in geocoded_for_prefix.iter().zip(&mut chunk.rows) {
             if let Some(response) = response {
-                chunk
-                    .shared
-                    .structure
-                    .add_value_columns_to_row(&response.fields, row)?;
+                geocoder.add_value_columns_to_row(response, row);
             } else {
-                chunk.shared.structure.add_empty_columns_to_row(row)?;
+                geocoder.add_empty_columns_to_row(row);
             }
         }
     }

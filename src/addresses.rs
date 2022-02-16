@@ -10,10 +10,9 @@ use std::{
     path::Path,
 };
 
-use crate::structure::Structure;
-use crate::Result;
+use crate::{geocoders::Geocoder, Result};
 
-/// An address record that we can pass to SmartyStreets.
+/// An address record that we can pass to a geocoder.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct Address {
     /// Either the street, or the entire address as a string. This must always
@@ -25,6 +24,31 @@ pub struct Address {
     pub state: Option<String>,
     /// The zipcode, if any.
     pub zipcode: Option<String>,
+}
+
+impl Address {
+    /// The `city` field, or an empty string.
+    pub fn city_str(&self) -> &str {
+        self.city.as_ref().map(|s| &s[..]).unwrap_or("")
+    }
+
+    /// The `state` field, or an empty string.
+    pub fn state_str(&self) -> &str {
+        self.state.as_ref().map(|s| &s[..]).unwrap_or("")
+    }
+
+    /// The `zipcode` field, or an empty string.
+    pub fn zipcode_str(&self) -> &str {
+        self.zipcode.as_ref().map(|s| &s[..]).unwrap_or("")
+    }
+
+    /// Is `self` equal to `other`, ignoring ASCII case?
+    pub fn eq_ignore_ascii_case(&self, other: &Address) -> bool {
+        self.street.eq_ignore_ascii_case(&other.street)
+            && self.city_str().eq_ignore_ascii_case(other.city_str())
+            && self.state_str().eq_ignore_ascii_case(other.state_str())
+            && self.zipcode_str().eq_ignore_ascii_case(other.zipcode_str())
+    }
 }
 
 /// Either a column name, or a list of names.
@@ -41,7 +65,7 @@ pub enum ColumnKeyOrKeys<K: Eq> {
 }
 
 impl ColumnKeyOrKeys<usize> {
-    /// Given a CSV row, extract an `Address` value to send to SmartyStreets.
+    /// Given a CSV row, extract an `Address` value to send to our geocoder.
     pub fn extract_from_record<'a>(
         &self,
         record: &'a StringRecord,
@@ -109,7 +133,7 @@ pub struct AddressColumnKeys<K: Default + Eq> {
 }
 
 impl AddressColumnKeys<usize> {
-    /// Given a CSV row, extract an `Address` value to send to SmartyStreets.
+    /// Given a CSV row, extract an `Address` value to send to our geocoder.
     pub fn extract_address_from_record(
         &self,
         record: &'_ StringRecord,
@@ -173,6 +197,11 @@ fn extract_complex_address_from_record() {
     );
 }
 
+/// Return a prefixed column name of the form `"{prefix}_{column}`".
+pub fn prefix_column_name(prefix: &str, column: &str) -> String {
+    format!("{}_{}", prefix, column)
+}
+
 /// A map from column prefixes (e.g. "home", "work") to address column keys.
 ///
 /// `K` is typically either a `String` (for a column name) or a `usize` (for a
@@ -217,16 +246,17 @@ impl<Key: Default + Eq> AddressColumnSpec<Key> {
     /// Returns the name and index of each column to remove, in order.
     pub fn duplicate_columns<'header>(
         &self,
-        structure: &Structure,
+        geocoder: &dyn Geocoder,
         header: &'header StringRecord,
     ) -> Result<Vec<(&'header str, usize)>> {
         // Get all our column names for all prefixes, and insert them into a
         // hash table.
         let mut output_column_names = HashSet::new();
         for prefix in self.prefixes() {
-            for name in structure.output_column_names(prefix)? {
-                if !output_column_names.insert(name.clone()) {
-                    return Err(format_err!("duplicate column name {:?}", name));
+            for name in geocoder.column_names() {
+                let full_name = prefix_column_name(prefix, name);
+                if !output_column_names.insert(full_name.clone()) {
+                    return Err(format_err!("duplicate column name {:?}", full_name));
                 }
             }
         }
@@ -243,8 +273,11 @@ impl<Key: Default + Eq> AddressColumnSpec<Key> {
 }
 
 #[test]
+#[ignore]
 fn find_columns_to_remove() {
     use std::iter::FromIterator;
+
+    use crate::geocoders::{shared_http_client, smarty::Smarty, MatchStrategy};
 
     let address_column_spec_json = r#"{
         "home": {
@@ -260,10 +293,15 @@ fn find_columns_to_remove() {
     let spec: AddressColumnSpec<String> =
         serde_json::from_str(address_column_spec_json).unwrap();
 
-    let structure = Structure::complete().unwrap();
+    let geocoder = Smarty::new(
+        MatchStrategy::Strict,
+        "us-standard-cloud".to_owned(),
+        shared_http_client(1),
+    )
+    .unwrap();
     let header =
         StringRecord::from_iter(&["existing", "home_addressee", "work_addressee"]);
-    let indices = spec.duplicate_columns(&structure, &header).unwrap();
+    let indices = spec.duplicate_columns(&geocoder, &header).unwrap();
     assert_eq!(indices, vec![("home_addressee", 1), ("work_addressee", 2)]);
 }
 
