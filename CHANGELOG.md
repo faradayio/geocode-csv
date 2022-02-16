@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Support for "geocoding" using `libpostal`. This returns parsed and normalized address fields, but no lat/lon data. To use this, pass `--geocoder=libpostal`.
 - Optionally normalize addresses using `libpostal` when using other geocoders.
 - We can now cache data using either Redis or BigTable.
-  - You can use `--cache-record-keys` to output the cache keys.
+  - You can use `--cache-output-keys` to output the cache keys.
 - We now calculate extensive geocoding metrics, and can either print them to standard output, or send them to NewRelic.
 
 ### Changed
