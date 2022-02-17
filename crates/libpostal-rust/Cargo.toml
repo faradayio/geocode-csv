@@ -1,6 +1,6 @@
 [package]
 name = "libpostal-rust"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Eric Kidd <git@randomhacks.net>"]
 edition = "2021"
 
@@ -13,6 +13,6 @@ documentation = "https://docs.rs/libpostal-rust"
 
 [dependencies]
 lazy_static = "1.4.0"
-libpostal-sys = { version = "0.1.0", path = "../libpostal-sys" }
+libpostal-sys = { version = "0.1.1", path = "../libpostal-sys" }
 thiserror = "1.0.30"
 tracing = "0.1.29"

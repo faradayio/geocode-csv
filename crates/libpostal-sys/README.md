@@ -6,6 +6,7 @@ Low-level Rust bindings for the excellent address-parsing library [libpostal](ht
 - Support for building static Rust binaries.
 - Support for thread-safe initialization of `libpostal`, using provided global locks.
 - Packing as a low-level `libpostal-sys` crate that can be shared between one or more high-level crates, as per standard Rust conventions.
+- Support from cross-compiling from `x86_64` Macs to `aarch64` (Apple Silicon).
 
 ## Development notes
 

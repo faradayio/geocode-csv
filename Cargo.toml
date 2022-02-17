@@ -24,7 +24,7 @@ csv = "1.0.7"
 futures = "0.3.4"
 hyper = { version = "0.14.7", features = ["client", "http2", "stream"] }
 hyper-rustls = { version = "0.23.0", features = ["rustls-native-certs", "http2"] }
-libpostal-rust = { version = "0.1.0", path = "crates/libpostal-rust" }
+libpostal-rust = { version = "0.1.1", path = "crates/libpostal-rust" }
 metrics = "0.18.0"
 metrics-util = "0.11.0"
 # Force OpenSSL to build as part of this binary. This gives us a fighting chance
