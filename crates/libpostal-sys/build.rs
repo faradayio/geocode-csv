@@ -4,6 +4,8 @@
 //! version, because this is a fairly obscure library and it's not availble even
 //! as an Ubuntu PPE.
 
+use std::env;
+
 /// The main entry point to our build script.
 fn main() {
     build_libpostal();
@@ -23,6 +25,33 @@ fn build_libpostal() {
     //     // Build `./configure` if it doesn't exist.
     //     config.reconf("-fi");
     // }
+
+    // Get our Rust target and host.
+    let rust_target = env::var("TARGET").expect("cargo should always define TARGET");
+    let rust_host = env::var("HOST").expect("cargo should always define HOST");
+
+    // When cross-compiling for M1 Macs, set `--host` appropriately. Keep in
+    // mind that:
+    //
+    // - Rust `TARGET` is `./configure --host=`.
+    // - Rust `HOST` is `./configure --build=`.
+    // - `./configure --target=` is only used when building a compiler on
+    //   `--build` that will run on `--host` and generate code for `--target`.
+    //   But Rust _always_ supports generating code for multiple targets, so it
+    //   doesn't think like this.
+    //
+    // I'm not sure why we need to set this manually, but it seems to be
+    // necessary. We might need to do this for other combinations, but let's add
+    // them as we discover them.
+    if rust_target == "aarch64-apple-darwin" && rust_host != "aarch64-apple-darwin" {
+        config.config_option("host", Some(&rust_target));
+    }
+
+    // If we're not on Intel, don't try to use Intel processor extensions. We
+    // need to disable this manually, apparently.
+    if !rust_target.starts_with("x86_64-") {
+        config.disable("sse2", None);
+    }
 
     let dst = config
         // You'll need to edit any `-Wall` out of the source tree,

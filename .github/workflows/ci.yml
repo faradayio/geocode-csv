@@ -79,10 +79,10 @@ jobs:
             host: x86_64-apple-darwin
             cargo: cargo
             os: macos-latest
-          # - target: aarch64-apple-darwin
-          #   host: x86_64-apple-darwin
-          #   cargo: cargo
-          #   os: macos-latest
+          - target: aarch64-apple-darwin
+            host: x86_64-apple-darwin
+            cargo: cargo
+            os: macos-latest
 
     runs-on: ${{ matrix.os }}
 
