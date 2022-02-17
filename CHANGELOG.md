@@ -4,15 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0-alpha.1] - 2022-02-16
 
 ### Changed
 
 - Renamed `--cache-record-keys` to `--cache-output-keys`.
 
-## [2.0.0-alpha.1] - 2022-02-03
+### Fixed
 
-Internal-only alpha release. No official binaries were ever built, and this exact release does not existing in `git` history. Included for completeness.
+- Cleaned up packaging, build and CI.
+
+## Internal-only releases - 2022-02-03
+
+Internal-only releases identified as either 1.0.2 or 2.0.0-alpha.1. No official binaries were ever built, and this exact release does not exist in `git` history. Included for completeness.
 
 ### Added
 
