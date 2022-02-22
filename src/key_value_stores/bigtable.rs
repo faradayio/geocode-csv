@@ -1,6 +1,7 @@
 //! Support for using BigTable as a key/value store.
 
 use std::{
+    borrow::Cow,
     collections::HashMap,
     time::{Duration, Instant},
 };
@@ -8,7 +9,7 @@ use std::{
 use anyhow::{format_err, Context};
 use async_trait::async_trait;
 use bigtable_rs::{
-    bigtable::{BigTable as BigTableClient, BigTableConnection},
+    bigtable::{self, BigTable as BigTableClient, BigTableConnection},
     google::bigtable::v2::{
         mutate_rows_request::Entry,
         mutation::{self, SetCell},
@@ -16,7 +17,7 @@ use bigtable_rs::{
         MutateRowsRequest, Mutation, ReadRowsRequest, RowFilter, RowSet,
     },
 };
-use metrics::{describe_histogram, histogram, Unit};
+use metrics::{counter, describe_histogram, histogram, Unit};
 use tracing::{instrument, trace};
 use url::Url;
 
@@ -205,7 +206,14 @@ impl<'store> PipelinedGet<'store> for BigTablePipelinedGet<'store> {
             ..ReadRowsRequest::default()
         };
         trace!("bigtable request: {:?}", request);
-        let response = client.read_rows(request).await?;
+        let response = match client.read_rows(request).await {
+            Ok(response) => response,
+            Err(err) => {
+                let cause = bigtable_error_cause_for_metrics(&err);
+                counter!("geocodecsv.selected_errors.count", 1, "component" => "bigtable", "cause" => cause);
+                return Err(err).context("error checking BigTable for cached values");
+            }
+        };
 
         histogram!(
             "geocodecsv.bigtable.get_request.duration_seconds",
@@ -300,15 +308,37 @@ impl<'store> PipelinedSet<'store> for BigTablePipelinedSet<'store> {
             app_profile_id: "".to_owned(), // Dave says this is what we want.
             entries: self.entries.clone(),
         };
-        client
-            .mutate_rows(request)
-            .await
-            .context("error writing cached values to BigTable")?;
+        if let Err(err) = client.mutate_rows(request).await {
+            let cause = bigtable_error_cause_for_metrics(&err);
+            counter!("geocodecsv.selected_errors.count", 1, "component" => "bigtable", "cause" => cause);
+            return Err(err).context("error writing cached values to BigTable");
+        }
 
         histogram!(
             "geocodecsv.bigtable.set_request.duration_seconds",
             (Instant::now() - start).as_secs_f64(),
         );
         Ok(())
+    }
+}
+
+/// Convert a BigTable error to a "low-arity" string describing what went wrong.
+///
+/// For reporting with metrics. This does not replace detailed logs, but it
+/// should give some quick ideas about what to look for.
+fn bigtable_error_cause_for_metrics(err: &bigtable::Error) -> Cow<'static, str> {
+    match err {
+        bigtable::Error::AccessTokenError(_) => Cow::Borrowed("access token"),
+        bigtable::Error::CertificateError(_) => Cow::Borrowed("certificate"),
+        // `std:io::ErrorKind` is low-arity, and Rust can at least turn it into
+        // a `Debug` string.
+        bigtable::Error::IoError(err) => Cow::Owned(format!("{:?}", err.kind())),
+        bigtable::Error::TransportError(_) => Cow::Borrowed("transport"),
+        bigtable::Error::RowNotFound => Cow::Borrowed("row not found"),
+        bigtable::Error::RowWriteFailed => Cow::Borrowed("row write failed"),
+        bigtable::Error::ObjectNotFound(_) => Cow::Borrowed("object not found"),
+        bigtable::Error::ObjectCorrupt(_) => Cow::Borrowed("object corrupt"),
+        bigtable::Error::RpcError(_) => Cow::Borrowed("rpc"),
+        bigtable::Error::TimeoutError(_) => Cow::Borrowed("timeout"),
     }
 }

@@ -6,12 +6,13 @@ use std::{env, str};
 use anyhow::{format_err, Context};
 use futures::stream::StreamExt;
 use hyper::{Body, Request};
-use metrics::{describe_histogram, histogram, Unit};
+use metrics::{counter, describe_histogram, histogram, Unit};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use url::Url;
 
 use crate::addresses::Address;
+use crate::errors::hyper_error_description_for_metrics;
 use crate::geocoders::{MatchStrategy, SharedHttpClient};
 use crate::unpack_vec::unpack_vec;
 use crate::Result;
@@ -130,7 +131,16 @@ async fn street_addresses_impl(
         .uri(url.as_str())
         .header("Content-Type", "application/json; charset=utf-8")
         .body(Body::from(serde_json::to_string(&requests)?))?;
-    let res = client.request(req).await?;
+    let res = match client.request(req).await {
+        Ok(res) => res,
+        Err(err) => {
+            // Errors that occur here are being reported by our local HTTP
+            // stack, not the remote server.
+            let desc = hyper_error_description_for_metrics(&err);
+            counter!("geocodecsv.selected_errors.count", 1, "component" => "smarty", "cause" => desc);
+            return Err(err.into());
+        }
+    };
     let status = res.status();
     let mut body = res.into_body();
     let mut body_data = vec![];
@@ -149,6 +159,8 @@ async fn street_addresses_impl(
         let resps: Vec<AddressResponse> = serde_json::from_slice(&body_data)?;
         Ok(unpack_vec(resps, requests.len(), |resp| resp.input_index)?)
     } else {
+        // This error was reported by the remote server.
+        counter!("geocodecsv.selected_errors.count", 1, "component" => "smarty", "cause" => status.to_string());
         Err(format_err!(
             "geocoding error: {}\n{}",
             status,
