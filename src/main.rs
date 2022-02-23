@@ -11,6 +11,7 @@ use geocoders::normalizer::Normalizer;
 use geocoders::smarty::Smarty;
 use geocoders::{shared_http_client, Geocoder};
 use key_value_stores::KeyValueStore;
+use metrics::describe_counter;
 use opinionated_metrics::Mode;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -157,6 +158,13 @@ async fn main() -> Result<()> {
         metrics_builder = metrics_builder.add_global_label(&label.key, &label.value);
     }
     let metrics_handle = metrics_builder.install()?;
+
+    // Describe our global metrics. Other metrics are described in the modules
+    // that use them.
+    describe_counter!(
+        "geocodecsv.selected_errors.count",
+        "Particularly interesting errors, by component and cause"
+    );
 
     // Choose our main geocoding client.
     let mut geocoder: Box<dyn Geocoder> = match opt.geocoder {
