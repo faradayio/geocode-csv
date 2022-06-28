@@ -25,7 +25,7 @@ const CHANNEL_BUFFER: usize = 8;
 pub const CONCURRENCY: usize = 48;
 
 /// The number of addresses to pass to our geocoder at one time.
-const GEOCODE_SIZE: usize = 72;
+pub const GEOCODE_SIZE: usize = 72;
 
 /// What should we do if a geocoding output column has the same as a column in
 /// the input?

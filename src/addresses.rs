@@ -296,6 +296,7 @@ fn find_columns_to_remove() {
     let geocoder = Smarty::new(
         MatchStrategy::Strict,
         "us-standard-cloud".to_owned(),
+        None,
         shared_http_client(1),
     )
     .unwrap();

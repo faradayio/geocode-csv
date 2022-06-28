@@ -29,6 +29,7 @@ fn all_fields() {
     );
     let output = testdir
         .cmd()
+        .arg("--license=us-core-enterprise-cloud")
         .arg("--spec=spec.json")
         .output_with_stdin(SIMPLE_CSV)
         .expect_success();
@@ -38,34 +39,36 @@ fn all_fields() {
     assert!(output.stdout_str().contains("40.21"));
 }
 
-#[test]
-#[ignore]
-fn rooftop() {
-    let testdir = TestDir::new("geocode-csv", "rooftop");
+// I can't find a license to run this test case right now.
+//
+// #[test]
+// #[ignore]
+// fn rooftop() {
+//     let testdir = TestDir::new("geocode-csv", "rooftop");
 
-    testdir.create_file(
-        "spec.json",
-        r#"{
-    "gc": {
-        "house_number_and_street": [
-            "address_1",
-            "address_2"
-        ],
-        "city": "city",
-        "state": "state",
-        "postcode": "zip_code"
-    }
-}"#,
-    );
-    let output = testdir
-        .cmd()
-        .arg("--license=us-rooftop-geocoding-enterprise-cloud")
-        .arg("--spec=spec.json")
-        .output_with_stdin(SIMPLE_CSV)
-        .expect_success();
-    assert!(output.stdout_str().contains("gc_addressee"));
-    assert!(output.stdout_str().contains("40.217266"));
-}
+//     testdir.create_file(
+//         "spec.json",
+//         r#"{
+//     "gc": {
+//         "house_number_and_street": [
+//             "address_1",
+//             "address_2"
+//         ],
+//         "city": "city",
+//         "state": "state",
+//         "postcode": "zip_code"
+//     }
+// }"#,
+//     );
+//     let output = testdir
+//         .cmd()
+//         .arg("--license=us-rooftop-geocoding-enterprise-cloud")
+//         .arg("--spec=spec.json")
+//         .output_with_stdin(SIMPLE_CSV)
+//         .expect_success();
+//     assert!(output.stdout_str().contains("gc_addressee"));
+//     assert!(output.stdout_str().contains("40.217266"));
+// }
 
 #[test]
 #[ignore]
@@ -86,6 +89,7 @@ fn single_address_field() {
 
     let output = testdir
         .cmd()
+        .arg("--license=us-core-enterprise-cloud")
         .arg("--spec=spec.json")
         .output_with_stdin(SIMPLE_CSV)
         .expect_success();
@@ -113,6 +117,7 @@ fn no_city_or_state() {
 
     let output = testdir
         .cmd()
+        .arg("--license=us-core-enterprise-cloud")
         .arg("--spec=spec.json")
         .output_with_stdin(SIMPLE_CSV)
         .expect_success();
@@ -142,6 +147,7 @@ fn freeform() {
 
     let output = testdir
         .cmd()
+        .arg("--license=us-core-enterprise-cloud")
         .arg("--spec=spec.json")
         .output_with_stdin(SIMPLE_CSV)
         .expect_success();
@@ -176,9 +182,38 @@ fn multiple_addresses() {
 
     let output = testdir
         .cmd()
+        .arg("--license=us-core-enterprise-cloud")
         .arg("--spec=spec.json")
         .output_with_stdin(SIMPLE_CSV)
         .expect_success();
     assert!(output.stdout_str().contains("shipping_addressee"));
     assert!(output.stdout_str().contains("billing_addressee"));
+}
+
+#[test]
+#[ignore]
+fn rate_limiter() {
+    let testdir = TestDir::new("geocode-csv", "rate_limiter");
+
+    testdir.create_file(
+        "spec.json",
+        r#"{
+    "shipping": {
+        "house_number_and_street": [
+            "address_1",
+            "address_2"
+        ],
+        "postcode": "zip_code"
+    }
+}"#,
+    );
+
+    let output = testdir
+        .cmd()
+        .arg("--license=us-core-enterprise-cloud")
+        .arg("--spec=spec.json")
+        .arg("--max-addresses-per-second=300")
+        .output_with_stdin(SIMPLE_CSV)
+        .expect_success();
+    assert!(output.stdout_str().contains("shipping_addressee"));
 }

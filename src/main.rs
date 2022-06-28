@@ -11,11 +11,14 @@ use geocoders::normalizer::Normalizer;
 use geocoders::smarty::Smarty;
 use geocoders::{shared_http_client, Geocoder};
 use key_value_stores::KeyValueStore;
+use leaky_bucket::RateLimiter;
 use metrics::describe_counter;
 use opinionated_metrics::Mode;
+use std::cmp::max;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use structopt::StructOpt;
 use tracing::{debug, info_span, warn};
 use tracing_subscriber::{
@@ -35,7 +38,7 @@ mod unpack_vec;
 
 use crate::addresses::AddressColumnSpec;
 use crate::geocoders::MatchStrategy;
-use crate::pipeline::{geocode_stdio, OnDuplicateColumns, CONCURRENCY};
+use crate::pipeline::{geocode_stdio, OnDuplicateColumns, CONCURRENCY, GEOCODE_SIZE};
 
 /// Underlying geocoders we can use. (Helper struct for argument parsing.)
 #[derive(Clone, Copy, Debug)]
@@ -127,6 +130,11 @@ struct Opt {
     #[structopt(long = "normalize")]
     normalize: bool,
 
+    /// Limit the speed with which we access external geocoding APIs. Does not
+    /// affect the cache or local geocoding.
+    #[structopt(long = "max-addresses-per-second")]
+    max_addresses_per_second: Option<usize>,
+
     /// Labels to attach to reported metrics. Recommended: "source=$SOURCE".
     #[structopt(long = "metrics-label", value_name = "KEY=VALUE")]
     metrics_labels: Vec<MetricsLabel>,
@@ -166,11 +174,35 @@ async fn main() -> Result<()> {
         "Particularly interesting errors, by component and cause"
     );
 
+    // Set up any rate limiting.
+    //
+    // TODO: If this is low enough, consider reducing our internal parallelism?
+    let rate_limiter = opt.max_addresses_per_second.map(|limit| {
+        // Always allow geocoding at least one full `GEOCODODE_SIZE`
+        // chunk (eventually). We want to make sure that we can
+        // accumulate enough tokens to geocode a chunk or two, to
+        // prevent a situation where we have a chunk waiting that
+        // exceeds our bucket size, blocking it from ever being
+        // geocoded.
+        let max = max(limit, GEOCODE_SIZE);
+        Arc::new(
+            RateLimiter::builder()
+                .initial(max)
+                .max(max)
+                .refill(limit)
+                .interval(Duration::from_secs(1))
+                // Since this is all the same geocoding job,
+                .fair(false)
+                .build(),
+        )
+    });
+
     // Choose our main geocoding client.
     let mut geocoder: Box<dyn Geocoder> = match opt.geocoder {
         GeocoderName::Smarty => Box::new(Smarty::new(
             opt.match_strategy,
             opt.smarty_license.clone(),
+            rate_limiter.clone(),
             shared_http_client(CONCURRENCY),
         )?),
         GeocoderName::LibPostal => Box::new(LibPostal::new()),

@@ -595,6 +595,7 @@ dependencies = [
  "futures",
  "hyper",
  "hyper-rustls",
+ "leaky-bucket",
  "libpostal-rust",
  "metrics",
  "metrics-util",
@@ -865,6 +866,17 @@ name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+
+[[package]]
+name = "leaky-bucket"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73fec97a5ac23f00d097097c6c0b91618fcfb43ec46acdba5e636d8afed5fb62"
+dependencies = [
+ "parking_lot",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "libc"

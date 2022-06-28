@@ -23,6 +23,7 @@ fn duplicate_columns_error() {
     testdir.create_file("spec.json", SIMPLE_SPEC);
     let output = testdir
         .cmd()
+        .arg("--license=us-core-enterprise-cloud")
         .arg("--spec=spec.json")
         .arg("--duplicate-columns=error")
         .output_with_stdin(SIMPLE_CSV)
@@ -39,6 +40,7 @@ fn duplicate_columns_replace() {
     testdir.create_file("spec.json", SIMPLE_SPEC);
     let output = testdir
         .cmd()
+        .arg("--license=us-core-enterprise-cloud")
         .arg("--spec=spec.json")
         .arg("--duplicate-columns=replace")
         .output_with_stdin(SIMPLE_CSV)
@@ -56,6 +58,7 @@ fn duplicate_columns_append() {
     testdir.create_file("spec.json", SIMPLE_SPEC);
     let output = testdir
         .cmd()
+        .arg("--license=us-core-enterprise-cloud")
         .arg("--spec=spec.json")
         .arg("--duplicate-columns=append")
         .output_with_stdin(SIMPLE_CSV)

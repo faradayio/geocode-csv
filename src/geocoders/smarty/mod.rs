@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
+use leaky_bucket::RateLimiter;
 use metrics::{counter, describe_counter};
 
 use crate::{addresses::Address, Result};
@@ -30,6 +33,9 @@ pub struct Smarty {
     /// The structure of a Smarty response.
     structure: Structure,
 
+    /// Optionally controls rate at which we access Smarty.
+    rate_limiter: Option<Arc<RateLimiter>>,
+
     /// Our Smarty API client.
     client: SmartyClient,
 }
@@ -38,6 +44,7 @@ impl Smarty {
     pub fn new(
         match_strategy: MatchStrategy,
         license: String,
+        rate_limiter: Option<Arc<RateLimiter>>,
         http_client: SharedHttpClient,
     ) -> Result<Smarty> {
         describe_counter!("geocodecsv.addresses_geocoded.total", "Addresses geocoded");
@@ -52,6 +59,7 @@ impl Smarty {
             match_strategy,
             license,
             structure,
+            rate_limiter,
             client,
         })
     }
@@ -75,6 +83,13 @@ impl Geocoder for Smarty {
         &self,
         addresses: &[Address],
     ) -> Result<Vec<Option<Geocoded>>> {
+        // If we have a rate limiter, ask for permission to geocode the
+        // specified number of addresses. We only check if we have one, in order
+        // minimize thread synchronization costs.
+        if let Some(rate_limiter) = &self.rate_limiter {
+            rate_limiter.acquire(addresses.len()).await;
+        }
+
         let requests = addresses
             .iter()
             .map(|addr| AddressRequest {

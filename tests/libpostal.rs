@@ -29,7 +29,7 @@ fn libpostal() {
     );
     let output = testdir
         .cmd()
-        .arg("--libpostal")
+        .arg("--geocoder=libpostal")
         .arg("--spec=spec.json")
         .output_with_stdin(SIMPLE_CSV)
         .expect_success();
