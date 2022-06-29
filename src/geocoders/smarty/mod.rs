@@ -3,6 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use leaky_bucket::RateLimiter;
 use metrics::{counter, describe_counter};
+use tracing::{trace_span, Instrument};
 
 use crate::{addresses::Address, Result};
 
@@ -87,7 +88,10 @@ impl Geocoder for Smarty {
         // specified number of addresses. We only check if we have one, in order
         // minimize thread synchronization costs.
         if let Some(rate_limiter) = &self.rate_limiter {
-            rate_limiter.acquire(addresses.len()).await;
+            let permits_needed = addresses.len();
+            let span =
+                trace_span!("rate_limiter::acquire", permits_needed = permits_needed);
+            rate_limiter.acquire(permits_needed).instrument(span).await;
         }
 
         let requests = addresses
