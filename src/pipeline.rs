@@ -72,6 +72,7 @@ pub async fn geocode_stdio(
     spec: AddressColumnSpec<String>,
     geocoder: Arc<dyn Geocoder>,
     on_duplicate_columns: OnDuplicateColumns,
+    max_retries: u8,
 ) -> Result<()> {
     describe_counter!("geocodecsv.addresses.total", "Total addresses processed");
     describe_counter!("geocodecsv.chunks.total", "Total address chunks processed");
@@ -106,7 +107,9 @@ pub async fn geocode_stdio(
         let in_rx = ReceiverStream::new(in_rx);
         let mut stream = in_rx
             // Turn input messages into futures that yield output messages.
-            .map(move |message| geocode_message(geocoder.clone(), message).boxed())
+            .map(move |message| {
+                geocode_message(geocoder.clone(), message, max_retries).boxed()
+            })
             // Turn output message futures into output messages in parallel.
             .buffered(CONCURRENCY);
 
@@ -337,12 +340,13 @@ fn write_csv_to_stdout(rx: Receiver<Message>) -> Result<()> {
 async fn geocode_message(
     geocoder: Arc<dyn Geocoder>,
     message: Message,
+    max_retries: u8,
 ) -> Result<Message> {
     match message {
         Message::Chunk(chunk) => {
             trace!("geocoding {} rows", chunk.rows.len());
             Ok(Message::Chunk(
-                geocode_chunk(geocoder.as_ref(), chunk).await?,
+                geocode_chunk(geocoder.as_ref(), chunk, max_retries).await?,
             ))
         }
         Message::EndOfStream => {
@@ -358,7 +362,11 @@ async fn geocode_message(
     skip_all,
     fields(rows = chunk.rows.len())
 )]
-async fn geocode_chunk(geocoder: &dyn Geocoder, mut chunk: Chunk) -> Result<Chunk> {
+async fn geocode_chunk(
+    geocoder: &dyn Geocoder,
+    mut chunk: Chunk,
+    max_retries: u8,
+) -> Result<Chunk> {
     // Build a list of addresses to geocode.
     let prefixes = chunk.shared.spec.prefixes();
     let mut addresses = vec![];
@@ -375,20 +383,24 @@ async fn geocode_chunk(geocoder: &dyn Geocoder, mut chunk: Chunk) -> Result<Chun
     let addresses_len = addresses.len();
 
     // Geocode our addresses.
-    //
-    // TODO: Retry on failure.
     trace!("geocoding {} addresses", addresses_len);
     let mut failures: u8 = 0;
+    let mut retry_wait = Duration::from_secs(2);
     let geocoded = loop {
         // TODO: The `clone` here is expensive. We might want to move the
         // `retry` loop inside of `street_addresses`.
         let result = geocoder.geocode_addresses(&addresses).await;
         match result {
-            Err(ref err) if failures < 5 => {
+            Err(ref err) if failures < max_retries => {
                 failures += 1;
-                debug!("retrying geocoder error: {:?}", err);
+                debug!(
+                    "retrying geocoder error (waiting {} secs): {:?}",
+                    retry_wait.as_secs(),
+                    err
+                );
                 counter!("geocodecsv.chunks_retried.total", 1);
-                sleep(Duration::from_secs(2));
+                sleep(retry_wait);
+                retry_wait *= 2;
             }
             Err(err) => {
                 counter!("geocodecsv.chunks_failed.total", 1);

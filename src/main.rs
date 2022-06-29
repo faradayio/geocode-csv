@@ -135,6 +135,12 @@ struct Opt {
     #[structopt(long = "max-addresses-per-second")]
     max_addresses_per_second: Option<usize>,
 
+    /// How many times should we retry a failed geocoding block? Each retry
+    /// takes twice as long as the last. The current default value will result
+    /// in giving up after about 30 seconds.
+    #[structopt(long = "max-retries", default_value = "4")]
+    max_retries: u8,
+
     /// Labels to attach to reported metrics. Recommended: "source=$SOURCE".
     #[structopt(long = "metrics-label", value_name = "KEY=VALUE")]
     metrics_labels: Vec<MetricsLabel>,
@@ -188,10 +194,13 @@ async fn main() -> Result<()> {
         Arc::new(
             RateLimiter::builder()
                 .initial(max)
-                .max(max)
+                // The docs recommend twice our refill rate or our
+                // initial value, whichever is larger.
+                .max(2 * max)
                 .refill(limit)
                 .interval(Duration::from_secs(1))
-                // Since this is all the same geocoding job,
+                // Since this is all the same geocoding job, don't worry about
+                // fair scheduling between different worker tasks.
                 .fair(false)
                 .build(),
         )
@@ -229,8 +238,13 @@ async fn main() -> Result<()> {
     }
 
     // Call our geocoder.
-    let result =
-        geocode_stdio(spec, Arc::from(geocoder), opt.on_duplicate_columns).await;
+    let result = geocode_stdio(
+        spec,
+        Arc::from(geocoder),
+        opt.on_duplicate_columns,
+        opt.max_retries,
+    )
+    .await;
 
     // Report our metrics.
     if let Err(err) = metrics_handle.report().await {
