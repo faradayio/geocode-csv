@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - `--max-retries` can now be used to control how many times we retry before giving up.
 
-## [1.2.0] - 2022-02-28
+## [1.2.0] - 2022-06-28
 
 ### Added
 
