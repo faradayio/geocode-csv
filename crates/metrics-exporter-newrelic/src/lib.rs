@@ -34,8 +34,8 @@ use std::{
 };
 
 use errors::ReportError;
-use metrics::{Counter, Gauge, Histogram, Key, KeyName, Recorder, Unit};
-use metrics_util::Registry;
+use metrics::{Counter, Gauge, Histogram, Key, KeyName, Recorder, SharedString, Unit};
+use metrics_util::registry::{AtomicStorage, Registry};
 use serde_json::{json, Value};
 use tokio::sync::RwLock;
 use tracing::instrument;
@@ -97,7 +97,7 @@ impl NewRelicBuilder {
     pub fn build(self) -> Result<NewRelicRecorder, BuildError> {
         Ok(NewRelicRecorder {
             inner: Arc::new(Inner {
-                registry: Registry::new(),
+                registry: Registry::new(AtomicStorage),
                 api_key: self.api_key,
                 global_labels: self.global_labels,
                 metadata: RwLock::new(MetricMetadata::new()),
@@ -132,7 +132,7 @@ impl MetricMetadata {
 /// installed.
 struct Inner {
     /// The registry which manages the low-level details of our metrics.
-    registry: Registry,
+    registry: Registry<Key, AtomicStorage>,
 
     /// Our NewRelic API key.
     api_key: String,
@@ -297,7 +297,7 @@ impl Recorder for NewRelicRecorder {
         &self,
         _key: KeyName,
         _unit: Option<Unit>,
-        _description: &'static str,
+        _description: SharedString,
     ) {
         // NewRelic does not use this information.
     }
@@ -306,7 +306,7 @@ impl Recorder for NewRelicRecorder {
         &self,
         _key: KeyName,
         _unit: Option<Unit>,
-        _description: &'static str,
+        _description: SharedString,
     ) {
         // NewRelic does not use this information.
     }
@@ -315,7 +315,7 @@ impl Recorder for NewRelicRecorder {
         &self,
         _key: KeyName,
         _unit: Option<Unit>,
-        _description: &'static str,
+        _description: SharedString,
     ) {
         // NewRelic does not use this information.
     }

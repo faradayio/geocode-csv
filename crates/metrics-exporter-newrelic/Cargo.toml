@@ -13,8 +13,8 @@ documentation = "https://docs.rs/metrics-exporter-newrelic"
 
 [dependencies]
 http = "0.2.6"
-metrics = "0.18.0"
-metrics-util = "0.11.0"
+metrics = "0.20.1"
+metrics-util = "0.14.0"
 reqwest = { version = "0.11.9", default-features = false, features = ["json", "rustls-tls"] }
 serde = "1.0.136"
 serde_derive = "1.0.136"
