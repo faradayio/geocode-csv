@@ -1204,7 +1204,7 @@ dependencies = [
 
 [[package]]
 name = "metrics-exporter-newrelic"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "http",
  "metrics",
@@ -1433,7 +1433,7 @@ dependencies = [
 
 [[package]]
 name = "opinionated_metrics"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "metrics",
  "metrics-exporter-newrelic",
