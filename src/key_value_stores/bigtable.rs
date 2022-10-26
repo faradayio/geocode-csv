@@ -340,5 +340,7 @@ fn bigtable_error_cause_for_metrics(err: &bigtable::Error) -> Cow<'static, str> 
         bigtable::Error::ObjectCorrupt(_) => Cow::Borrowed("object corrupt"),
         bigtable::Error::RpcError(_) => Cow::Borrowed("rpc"),
         bigtable::Error::TimeoutError(_) => Cow::Borrowed("timeout"),
+        bigtable::Error::ChunkError(_) => Cow::Borrowed("chunk"),
+        bigtable::Error::GCPAuthError(_) => Cow::Borrowed("gcp auth"),
     }
 }

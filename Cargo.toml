@@ -18,7 +18,7 @@ anyhow = { version = "1.0.40", features = ["backtrace"] }
 async-trait = "0.1.52"
 bb8 = "0.7.1"
 bb8-redis = "0.10.1"
-bigtable_rs = "0.1.5"
+bigtable_rs = "0.2.2"
 bincode = { version = "2.0.0-beta.2", features = ["serde", "serde_alloc"] }
 csv = "1.0.7"
 futures = "0.3.4"
