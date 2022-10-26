@@ -2,6 +2,19 @@
 #
 # These policies can be enforced using `cargo deny check`.
 
+[advisories]
+ignore = [
+    # Ignore a nasty `localtime_r` and `setenv` race condition which can
+    # segfault if we try to read the localtime while someone is setting an env
+    # var.
+    #
+    # This can probably be fixed once
+    # https://github.com/chronotope/chrono/issues/602 has been addressed.
+    #"RUSTSEC-2020-0159",
+    # Also `localtime_r`.
+    "RUSTSEC-2020-0071",
+]
+
 [licenses]
 # Don't allow code with an unclear license.
 unlicensed = "deny"
@@ -10,7 +23,7 @@ unlicensed = "deny"
 copyleft = "deny"
 
 # Allow common non-restrictive licenses.
-allow = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "CC0-1.0", "ISC", "MPL-2.0", "OpenSSL"]
+allow = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "CC0-1.0", "ISC", "MPL-2.0", "OpenSSL", "Unicode-DFS-2016"]
 
 # Many organizations ban AGPL-licensed code
 # https://opensource.google/docs/using/agpl-policy/
