@@ -92,8 +92,9 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install automake
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v1
+      - uses: abelfodil/protoc-action@v1
+        with:
+          protoc-version: "3.0.0"
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
