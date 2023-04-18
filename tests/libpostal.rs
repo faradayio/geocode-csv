@@ -6,6 +6,7 @@ use cli_test_dir::*;
 const SIMPLE_CSV: &str = "address_1,address_2,city,state,zip_code
 20 W 34th St,,New York,NY,10118
 1224 S 760 W,,Provo,UT,
+104 16th st,,Belleair Bch,FL,
 ";
 
 #[test]
@@ -35,4 +36,5 @@ fn libpostal() {
         .expect_success();
     assert!(output.stdout_str().contains("gc_city"));
     assert!(output.stdout_str().contains("new york"));
+    assert!(output.stdout_str().contains("belleair"));
 }
