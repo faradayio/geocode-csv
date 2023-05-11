@@ -5,12 +5,6 @@
 
 pub use anyhow::Result;
 use anyhow::{format_err, Error};
-use geocoders::cache::Cache;
-use geocoders::libpostal::LibPostal;
-use geocoders::normalizer::Normalizer;
-use geocoders::smarty::Smarty;
-use geocoders::{shared_http_client, Geocoder};
-use key_value_stores::KeyValueStore;
 use leaky_bucket::RateLimiter;
 use metrics::describe_counter;
 use opinionated_metrics::Mode;
@@ -37,7 +31,12 @@ mod pipeline;
 mod unpack_vec;
 
 use crate::addresses::AddressColumnSpec;
-use crate::geocoders::MatchStrategy;
+use crate::geocoders::{
+    cache::Cache, invalid_record_skipper::InvalidRecordSkipper, libpostal::LibPostal,
+    normalizer::Normalizer, shared_http_client, smarty::Smarty, Geocoder,
+    MatchStrategy,
+};
+use crate::key_value_stores::KeyValueStore;
 use crate::pipeline::{geocode_stdio, OnDuplicateColumns, CONCURRENCY, GEOCODE_SIZE};
 
 /// Underlying geocoders we can use. (Helper struct for argument parsing.)
@@ -236,6 +235,9 @@ async fn main() -> Result<()> {
     if opt.normalize {
         geocoder = Box::new(Normalizer::new(geocoder));
     }
+
+    // Always skip invalid records.
+    geocoder = Box::new(InvalidRecordSkipper::new(geocoder));
 
     // Call our geocoder.
     let result = geocode_stdio(

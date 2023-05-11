@@ -27,6 +27,12 @@ pub struct Address {
 }
 
 impl Address {
+    /// A valid `Address` has a non-empty `street` field. (And whitespace
+    /// doesn't count as non-empty.)
+    pub fn is_valid(&self) -> bool {
+        !self.street.trim().is_empty()
+    }
+
     /// The `city` field, or an empty string.
     pub fn city_str(&self) -> &str {
         self.city.as_ref().map(|s| &s[..]).unwrap_or("")
