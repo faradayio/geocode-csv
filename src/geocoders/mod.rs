@@ -16,6 +16,7 @@ use crate::{
 };
 
 pub mod cache;
+pub mod invalid_record_skipper;
 pub mod libpostal;
 pub mod normalizer;
 pub mod smarty;
@@ -55,6 +56,9 @@ pub enum MatchStrategy {
     Enhanced,
 }
 
+// `#derive(Default)` would actually do the right thing, but we want to make the
+// default explicit for the reader.
+#[allow(clippy::derivable_impls)]
 impl Default for MatchStrategy {
     fn default() -> Self {
         MatchStrategy::Strict
@@ -122,7 +126,7 @@ pub trait Geocoder: Send + Sync + 'static {
         let mut hasher = Sha256::new();
         for column_name in self.column_names() {
             hasher.update(column_name.as_bytes());
-            hasher.update(&[0]);
+            hasher.update([0]);
         }
         hasher.update(self.configuration_key());
         let hash = hasher.finalize();

@@ -186,7 +186,7 @@ impl Geocoder for Cache {
                 // Encode our value for caching.
                 let value = retry.as_ref().map(|retry| &retry.column_values);
                 encoded.clear();
-                bincode::encode_into_std_write(&value, &mut encoded, bincode_config)
+                bincode::encode_into_std_write(value, &mut encoded, bincode_config)
                     .context("could not encode value for caching")?;
 
                 // Compress our encoded value and add it to our pipeline set.
