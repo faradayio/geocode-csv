@@ -47,5 +47,9 @@ tracing = "0.1.29"
 tracing-subscriber = { version = "0.3.7", features = ["env-filter"] }
 url = "2.1.1"
 
+[target.x86_64-unknown-linux-musl]
+# When using cargo cross, we need to install the protobuf compiler.
+pre-build = ["apt-get update && apt-get install -y protobuf-compiler"]
+
 [workspace]
 members = ["crates/libpostal-sys", "crates/libpostal-rust", "crates/metrics-exporter-newrelic", "crates/opinionated_metrics"]
