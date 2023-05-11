@@ -108,8 +108,7 @@ impl Geocoder for Cache {
         // Our standard bincode configuration.
         let bincode_config = bincode::config::standard()
             .with_little_endian()
-            .with_variable_int_encoding()
-            .skip_fixed_array_length();
+            .with_variable_int_encoding();
 
         // Unpack our results, recording any cache hits, and building a list of
         // the misses to forward to our inner geocoder.
