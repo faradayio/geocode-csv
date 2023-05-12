@@ -47,14 +47,5 @@ tracing = "0.1.29"
 tracing-subscriber = { version = "0.3.7", features = ["env-filter"] }
 url = "2.1.1"
 
-[target.x86_64-unknown-linux-musl]
-# When using cargo cross, we need to install the protobuf compiler. See:
-#
-# https://github.com/cross-rs/cross#pre-build-hook
-# https://grpc.io/docs/protoc-installation/#install-using-a-package-manager
-# https://github.com/cross-rs/cross/issues/1257#issuecomment-1544553706
-image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
-pre-build = ["apt-get update && apt-get install -y protobuf-compiler"]
-
 [workspace]
 members = ["crates/libpostal-sys", "crates/libpostal-rust", "crates/metrics-exporter-newrelic", "crates/opinionated_metrics"]
