@@ -52,6 +52,8 @@ url = "2.1.1"
 #
 # https://github.com/cross-rs/cross#pre-build-hook
 # https://grpc.io/docs/protoc-installation/#install-using-a-package-manager
+# https://github.com/cross-rs/cross/issues/1257#issuecomment-1544553706
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main"
 pre-build = ["apt-get update && apt-get install -y protobuf-compiler"]
 
 [workspace]
