@@ -130,7 +130,7 @@ jobs:
         # Note that this will not work for Rust programs using openssl or libpq.
         run: |
           version=v0.2.5
-          basename=cross-$version-${{ matrix.host }}
+          basename=cross-${{ matrix.host }}
           curl -fLO https://github.com/rust-embedded/cross/releases/download/$version/$basename.tar.gz
           tar xf $basename.tar.gz
           mv cross /usr/local/bin/
