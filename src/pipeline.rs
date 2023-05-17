@@ -4,6 +4,7 @@ use anyhow::{format_err, Context, Error};
 use csv::{self, StringRecord};
 use futures::{executor::block_on, future, FutureExt, StreamExt};
 use metrics::{counter, describe_counter};
+use std::sync::atomic::AtomicI64;
 use std::{
     cmp::max, io, iter::FromIterator, sync::Arc, thread::sleep, time::Duration,
 };
@@ -27,6 +28,21 @@ pub const CONCURRENCY: usize = 48;
 /// The number of addresses to pass to our geocoder at one time.
 pub const GEOCODE_SIZE: usize = 72;
 
+/// This is the maximum number of chunks that we expect to see in our pipeline
+/// at any one time. If we see more than this, it means that backpressure isn't
+/// working correctly somewhere.
+///
+/// Here's how we compute this:
+///
+/// - We have up to `CONCURRENCY` workers, each of which can process a chunk.
+/// - We have two channels, one between the CSV reader and the workers, and one
+///   between the workers and the CSV writer. Each of these channels can buffer
+///   up to `CHANNEL_BUFFER` chunks.
+/// - We may have one chunk in the CSV reader and one chunk in the CSV writer.
+/// - We allow up to 10 chunks just in case we're overlooking something
+///   in the async machinery that allows a few extra chunks.
+const MAX_EXPECTED_CHUNKS: usize = CHANNEL_BUFFER * 2 + CONCURRENCY + 2 + 10;
+
 /// What should we do if a geocoding output column has the same as a column in
 /// the input?
 #[derive(Debug, Clone, Copy, EnumString, Eq, PartialEq)]
@@ -48,12 +64,47 @@ struct Shared {
     out_headers: StringRecord,
 }
 
+/// We use an atomic counter to keep track of how many chunks currently exist.
+/// This is used to make sure that we're not seeing parts of our pipeline that
+/// are allowing too much
+/// ["backpressure"](https://ferd.ca/queues-don-t-fix-overload.html) to build
+/// up.
+static TOTAL_CHUNKS_EXISTING: AtomicI64 = AtomicI64::new(0);
+
 /// A chunk to geocode.
 struct Chunk {
     /// Shared information about the CSV file, including headers.
     shared: Arc<Shared>,
     /// The rows to geocode.
     rows: Vec<StringRecord>,
+}
+
+impl Chunk {
+    /// Create a new `Chunk`.
+    fn new(shared: Arc<Shared>, rows: Vec<StringRecord>) -> Chunk {
+        let existing =
+            TOTAL_CHUNKS_EXISTING.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if existing > MAX_EXPECTED_CHUNKS as i64 {
+            panic!(
+                "too many chunks in the pipeline: found {}, expected at most {}",
+                existing, MAX_EXPECTED_CHUNKS
+            );
+        }
+        Chunk { shared, rows }
+    }
+}
+
+impl Drop for Chunk {
+    fn drop(&mut self) {
+        let existing =
+            TOTAL_CHUNKS_EXISTING.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        if existing < 0 {
+            panic!(
+                "we apparently have negative chunks ({}) in the pipeline?",
+                existing
+            );
+        }
+    }
 }
 
 /// A message sent on our channel.
@@ -229,6 +280,7 @@ fn read_csv_from_stdin(
     // `GEOCODE`-size addresses at a time, and each input row may generate up to
     // `spec.prefix_count()` addresses.
     let chunk_size = max(1, GEOCODE_SIZE / max(spec.prefix_count(), 1));
+    assert!(chunk_size > 0 && chunk_size <= GEOCODE_SIZE);
 
     // Build our output headers.
     let mut out_headers = in_headers;
@@ -252,13 +304,10 @@ fn read_csv_from_stdin(
         rows.push(row);
         if rows.len() >= chunk_size {
             trace!("sending {} input rows", rows.len());
-            block_on(tx.send(Message::Chunk(Chunk {
-                shared: shared.clone(),
-                rows,
-            })))
-            .map_err(|_| {
-                format_err!("could not send rows to geocoder (perhaps it failed)")
-            })?;
+            block_on(tx.send(Message::Chunk(Chunk::new(shared.clone(), rows))))
+                .map_err(|_| {
+                    format_err!("could not send rows to geocoder (perhaps it failed)")
+                })?;
             sent_chunk = true;
             rows = Vec::with_capacity(chunk_size);
         }
@@ -313,8 +362,8 @@ fn write_csv_to_stdout(rx: Receiver<Message>) -> Result<()> {
                     wtr.write_record(&chunk.shared.out_headers)?;
                     headers_written = true;
                 }
-                for row in chunk.rows {
-                    wtr.write_record(&row)?;
+                for row in &chunk.rows {
+                    wtr.write_record(row)?;
                 }
             }
             Message::EndOfStream => {

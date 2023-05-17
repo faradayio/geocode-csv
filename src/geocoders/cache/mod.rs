@@ -96,6 +96,14 @@ impl Geocoder for Cache {
         // Start with each geocoded address set to `None`.
         let mut geocoded = vec![None; addresses.len()];
 
+        // If we have no records, don't call into the cache, because this may
+        // cause weird problems, including hanging or running out of memory.
+        // I suspect that there's an issue in the `bigtable` driver, but this
+        // is a resonable thing to do anyway.
+        if keys.is_empty() {
+            return Ok(geocoded);
+        }
+
         // TODO: De-duplicate duplicate addresses _within_ `addresses`.
 
         // Check to see what keys are stored in Redis.
@@ -168,6 +176,7 @@ impl Geocoder for Cache {
             }
         }
         counter!("geocodecsv.cache_misses.total", cache_misses.len() as u64);
+        drop(cache_results);
 
         // If we have any cache misses, deal with them.
         if !cache_misses.is_empty() {

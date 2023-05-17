@@ -21,6 +21,8 @@ use metrics::{counter, describe_histogram, histogram, Unit};
 use tracing::{instrument, trace};
 use url::Url;
 
+#[cfg(debug_assertions)]
+use crate::memory_used::MemoryUsed;
 use crate::{pipeline::CONCURRENCY, Result};
 
 use super::{KeyValueStore, KeyValueStoreNew, PipelinedGet, PipelinedSet};
@@ -214,6 +216,11 @@ impl<'store> PipelinedGet<'store> for BigTablePipelinedGet<'store> {
                 return Err(err).context("error checking BigTable for cached values");
             }
         };
+        debug_assert!(
+            response.memory_used() < 1024 * 1024,
+            "BigTable response is using far too much memory: {} bytes",
+            response.memory_used()
+        );
 
         histogram!(
             "geocodecsv.bigtable.get_request.duration_seconds",

@@ -58,14 +58,16 @@ impl Geocoder for InvalidRecordSkipper {
             }
         }
 
-        // Geocode our valid addresses.
-        let geocodeded = self.inner.geocode_addresses(&valid_addresses).await?;
-
-        // Rebuild our geocoded addresses, inserting `None` for invalid.
+        // Geocode our valid addresses, if we have any.
         let mut result = vec![None; addresses.len()];
-        for (i, geocoded) in geocodeded.into_iter().enumerate() {
-            let original_index = original_indices[i];
-            result[original_index] = geocoded;
+        if !valid_addresses.is_empty() {
+            let geocodeded = self.inner.geocode_addresses(&valid_addresses).await?;
+
+            // Rebuild our geocoded addresses, inserting `None` for invalid.
+            for (i, geocoded) in geocodeded.into_iter().enumerate() {
+                let original_index = original_indices[i];
+                result[original_index] = geocoded;
+            }
         }
         Ok(result)
     }

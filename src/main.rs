@@ -27,6 +27,8 @@ mod async_util;
 mod errors;
 mod geocoders;
 mod key_value_stores;
+#[cfg(debug_assertions)]
+mod memory_used;
 mod pipeline;
 mod unpack_vec;
 
@@ -38,6 +40,10 @@ use crate::geocoders::{
 };
 use crate::key_value_stores::KeyValueStore;
 use crate::pipeline::{geocode_stdio, OnDuplicateColumns, CONCURRENCY, GEOCODE_SIZE};
+
+#[cfg(all(feature = "jemallocator", not(target_env = "msvc")))]
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 /// Underlying geocoders we can use. (Helper struct for argument parsing.)
 #[derive(Clone, Copy, Debug)]
