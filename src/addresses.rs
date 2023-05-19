@@ -57,6 +57,20 @@ impl Address {
     }
 }
 
+#[test]
+fn address_is_valid_does_not_allow_empty_streets() {
+    let address_for = |street: &str| Address {
+        street: street.to_owned(),
+        city: None,
+        state: None,
+        zipcode: None,
+    };
+    assert!(!address_for("").is_valid());
+    assert!(!address_for("   ").is_valid());
+    assert!(!address_for(" \t\n  ").is_valid());
+    assert!(address_for("123 Main Street").is_valid());
+}
+
 /// Either a column name, or a list of names.
 ///
 /// `K` is typically either a `String` (for a column name) or a `usize` (for a

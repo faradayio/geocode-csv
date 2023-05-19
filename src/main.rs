@@ -237,13 +237,14 @@ async fn main() -> Result<()> {
         );
     }
 
+    // Always skip invalid records. This needs to happen after we do
+    // normalization, because normalization might move data between fields.
+    geocoder = Box::new(InvalidRecordSkipper::new(geocoder));
+
     // If we were asked, normalize addresses a bit first.
     if opt.normalize {
         geocoder = Box::new(Normalizer::new(geocoder));
     }
-
-    // Always skip invalid records.
-    geocoder = Box::new(InvalidRecordSkipper::new(geocoder));
 
     // Call our geocoder.
     let result = geocode_stdio(

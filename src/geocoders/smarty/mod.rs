@@ -84,6 +84,14 @@ impl Geocoder for Smarty {
         &self,
         addresses: &[Address],
     ) -> Result<Vec<Option<Geocoded>>> {
+        // An array used to store our geocoding results.
+        let mut geocoded = vec![None; addresses.len()];
+
+        // If we have nothing to do, exit immediately.
+        if addresses.is_empty() {
+            return Ok(geocoded);
+        }
+
         // If we have a rate limiter, ask for permission to geocode the
         // specified number of addresses. We only check if we have one, in order
         // minimize thread synchronization costs.
@@ -111,9 +119,8 @@ impl Geocoder for Smarty {
         counter!("geocodecsv.addresses_geocoded.total", hits as u64, "geocoder" => "smarty", "geocode_result" => "found");
         counter!("geocodecsv.addresses_geocoded.total", (addresses.len() - hits) as u64, "geocoder" => "smarty", "geocode_result" => "unknown_address");
 
-        // Build an array containing only the addresses that actually geocoded
-        // successfully.
-        let mut geocoded = vec![None; addresses.len()];
+        // Response with only the addresses that actually geocoded successfully.
+        // We need make sure we map outputs back to their original positions.
         for address_output in response.into_iter().flatten() {
             let column_values =
                 self.structure.value_columns_for(&address_output.fields)?;

@@ -8,7 +8,7 @@ use futures::stream::StreamExt;
 use hyper::{Body, Request};
 use metrics::{counter, describe_histogram, histogram, Unit};
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{error, instrument};
 use url::Url;
 
 use crate::addresses::Address;
@@ -160,11 +160,49 @@ async fn street_addresses_impl(
         Ok(unpack_vec(resps, requests.len(), |resp| resp.input_index)?)
     } else {
         // This error was reported by the remote server.
+
+        // Add error to metrics.
         counter!("geocodecsv.selected_errors.count", 1, "component" => "smarty", "cause" => status.to_string());
+
+        // Log information about bad street fields, if we can.
+        if status == 422 {
+            if let Ok(error_response) =
+                serde_json::from_slice::<SmartyErrorResponse>(&body_data)
+            {
+                let mut missing_street = false;
+                for error in error_response.errors {
+                    if error.name == "us-street-api:query-missing-street" {
+                        missing_street = true;
+                        break;
+                    }
+                }
+                if missing_street {
+                    let streets = requests
+                        .iter()
+                        .map(|req| req.address.street.to_owned())
+                        .collect::<Vec<_>>();
+                    error!("At least one missing street in: {:?}", streets);
+                }
+            }
+        }
+
+        // Convert to a Rust error.
         Err(format_err!(
             "geocoding error: {}\n{}",
             status,
             String::from_utf8_lossy(&body_data),
         ))
     }
+}
+
+/// Smarty error response body.
+#[derive(Debug, Deserialize)]
+struct SmartyErrorResponse {
+    errors: Vec<SmartyError>,
+}
+
+/// Smarty error.
+#[derive(Debug, Deserialize)]
+struct SmartyError {
+    name: String,
 }
