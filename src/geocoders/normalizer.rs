@@ -135,6 +135,24 @@ fn normalized_to_address(
     // "Brooklyn", with "city" either empty, or containing something
     // like "New York City".
     let mut city = String::with_capacity(32);
+    // In a number of cases, the "important" part of a city name will be parsed out as a suburb.
+    // Here's an example taken from our data:
+    // > 104 16th st belleair bch fl
+    //
+    // Result:
+    //
+    // {
+    //   "house_number": "104",
+    //   "road": "16th st",
+    //   "suburb": "belleair",
+    //   "city": "bch",
+    //   "state": "fl"
+    // }
+    // We need to recapture the "belleair" part of the city, because without it, we only have
+    // "bch", which we have seen to lead to very bad geocodes. It's safe to do this, because
+    // libpostal is never going to just "make up" or add parts to our address which weren't there, so
+    // if there is data in the "suburb" field, we can assume it's part of the city.
+    append_component(component_indices, &mut city, normalized, "suburb");
     append_component(component_indices, &mut city, normalized, "city_district");
     append_component(component_indices, &mut city, normalized, "city");
 
