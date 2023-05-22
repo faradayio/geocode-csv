@@ -108,22 +108,24 @@ jobs:
       - uses: actions/checkout@v2
         with:
           submodules: recursive
-      - name: Check source formatting and warnings
+      - name: Install Just
         run: |
-          cargo fmt -- --check
-          cargo clippy -- -D warnings
-      - name: Check policy
-        run: |
+          version=1.13.0
+          basename=just-$version-${{ matrix.host }}
+          curl -fLO https://github.com/casey/just/releases/download/$version/$basename.tar.gz
+          tar xf $basename.tar.gz just
+          mv just /usr/local/bin/
+          rm -rf $basename.tar.gz
+      - name: Install cargo-deny
           version=0.11.0
           basename=cargo-deny-$version-${{ matrix.host }}
           curl -fLO https://github.com/EmbarkStudios/cargo-deny/releases/download/$version/$basename.tar.gz
           tar xf $basename.tar.gz
           mv $basename/cargo-deny /usr/local/bin/
           rm -rf $basename $basename.tar.gz
-          cargo deny check
-      - name: Test
+      - name: Check source formatting, warnings, licences, security alerts & tests
         run: |
-          cargo test
+          just check
       - name: Install cargo cross (if needed)
         if: ${{ matrix.cargo == 'cross' }}
         # Note that this will not work for Rust programs using openssl or libpq.
