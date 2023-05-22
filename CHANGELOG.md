@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.7] - 2023-05-22
+
+### Added
+
+- Use a `Justfile` to document and automate common maintainer tasks.
+
+### Fixed
+
+- Fixed an issue where libpostal would occasionally parse cities as suburbs. Thank you, Tom, for the PR!
+
 ## [1.3.6] - 2023-05-19
 
 ### Fixed
