@@ -5,6 +5,7 @@
 
 pub use anyhow::Result;
 use anyhow::{format_err, Error};
+use clap::{Parser, ValueEnum};
 use leaky_bucket::RateLimiter;
 use metrics::describe_counter;
 use opinionated_metrics::Mode;
@@ -13,7 +14,6 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use structopt::StructOpt;
 use tracing::{debug, info_span, warn};
 use tracing_subscriber::{
     fmt::{format::FmtSpan, Subscriber},
@@ -46,9 +46,11 @@ use crate::pipeline::{geocode_stdio, OnDuplicateColumns, CONCURRENCY, GEOCODE_SI
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 /// Underlying geocoders we can use. (Helper struct for argument parsing.)
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, ValueEnum)]
 enum GeocoderName {
+    #[value(name = "smarty")]
     Smarty,
+    #[value(name = "libpostal")]
     LibPostal,
 }
 
@@ -66,7 +68,7 @@ impl FromStr for GeocoderName {
 
 /// Key/value pairs used to annotate reported metrics. These are of the form
 /// `KEY=VALUE`. (Helper struct for argument parsing.)
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct MetricsLabel {
     key: String,
     value: String,
@@ -88,30 +90,30 @@ impl FromStr for MetricsLabel {
 }
 
 /// Our command-line arguments.
-#[derive(Debug, StructOpt)]
-#[structopt(about = "geocode CSV files passed on standard input")]
+#[derive(Debug, Parser)]
+#[command(author, version, about = "geocode CSV files passed on standard input")]
 struct Opt {
     /// `strict` for valid postal addresses only, `range` for unknown addresses
     /// within a street's known range, `invalid` to always generate some
     /// match, and `enhanced` (Smarty-only) if you've paid for it.
-    #[structopt(long = "match", default_value = "strict")]
+    #[arg(long = "match", default_value = "strict")]
     match_strategy: MatchStrategy,
 
     /// What should we if geocoding output columns have the same names as input
     /// columns? [error, replace, append]
-    #[structopt(long = "duplicate-columns", default_value = "error")]
+    #[arg(long = "duplicate-columns", default_value = "error")]
     on_duplicate_columns: OnDuplicateColumns,
 
     /// A JSON file describing what columns to geocode.
-    #[structopt(long = "spec")]
+    #[arg(long = "spec")]
     spec_path: PathBuf,
 
     /// The geocoder to use.
-    #[structopt(long = "geocoder", default_value = "smarty", possible_values = &["smarty", "libpostal"])]
+    #[arg(long = "geocoder", default_value = "smarty")]
     geocoder: GeocoderName,
 
     /// What license to use. Leave blank for standard, `us-rooftop-geocoding-enterprise-cloud` for Rooftop.
-    #[structopt(
+    #[arg(
         long = "smarty-license",
         alias = "license",
         default_value = "us-standard-cloud"
@@ -120,34 +122,34 @@ struct Opt {
 
     /// Cache geocoding results in the specified location (either redis: or
     /// bigtable:).
-    #[structopt(long = "cache", value_name = "CACHE_URL")]
+    #[arg(long = "cache", value_name = "CACHE_URL")]
     cache_url: Option<Url>,
 
     /// Include cache keys in the output. Mostly useful for debugging.
-    #[structopt(long = "cache-output-keys")]
+    #[arg(long = "cache-output-keys")]
     cache_output_keys: bool,
 
     /// Extra prefix to use for cache keys. Should typically end with ":".
-    #[structopt(long = "cache-key-prefix", requires = "cache_url")]
+    #[arg(long = "cache-key-prefix", requires = "cache_url")]
     cache_key_prefix: Option<String>,
 
     /// Before processing addresses, normalize them using libpostal.
-    #[structopt(long = "normalize")]
+    #[arg(long = "normalize")]
     normalize: bool,
 
     /// Limit the speed with which we access external geocoding APIs. Does not
     /// affect the cache or local geocoding.
-    #[structopt(long = "max-addresses-per-second")]
+    #[arg(long = "max-addresses-per-second")]
     max_addresses_per_second: Option<usize>,
 
     /// How many times should we retry a failed geocoding block? Each retry
     /// takes twice as long as the last. The current default value will result
     /// in giving up after about 30 seconds.
-    #[structopt(long = "max-retries", default_value = "4")]
+    #[arg(long = "max-retries", default_value = "4")]
     max_retries: u8,
 
     /// Labels to attach to reported metrics. Recommended: "source=$SOURCE".
-    #[structopt(long = "metrics-label", value_name = "KEY=VALUE")]
+    #[arg(long = "metrics-label", value_name = "KEY=VALUE")]
     metrics_labels: Vec<MetricsLabel>,
 }
 
@@ -168,7 +170,7 @@ async fn main() -> Result<()> {
     debug!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
 
     // Parse our command-line arguments.
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
     let spec = AddressColumnSpec::from_path(&opt.spec_path)?;
 
     // Set up metrics recording.

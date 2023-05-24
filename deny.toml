@@ -52,8 +52,7 @@ multiple-versions = "warn"
 deny = [
     # This never causes anything but portability misery. But we currently need
     # it for bigtable_rs.
-    #
-    # { name = "openssl-sys" },
+    { name = "openssl-sys" },
 ]
 
 skip = [
