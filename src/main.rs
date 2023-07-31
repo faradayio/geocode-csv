@@ -5,7 +5,7 @@
 
 pub use anyhow::Result;
 use anyhow::{format_err, Error};
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use leaky_bucket::RateLimiter;
 use metrics::describe_counter;
 use opinionated_metrics::Mode;
@@ -30,6 +30,7 @@ mod key_value_stores;
 #[cfg(debug_assertions)]
 mod memory_used;
 mod pipeline;
+mod server;
 mod unpack_vec;
 
 use crate::addresses::AddressColumnSpec;
@@ -40,6 +41,7 @@ use crate::geocoders::{
 };
 use crate::key_value_stores::KeyValueStore;
 use crate::pipeline::{geocode_stdio, OnDuplicateColumns, CONCURRENCY, GEOCODE_SIZE};
+use crate::server::run_server;
 
 #[cfg(all(feature = "jemallocator", not(target_env = "msvc")))]
 #[global_allocator]
@@ -151,6 +153,21 @@ struct Opt {
     /// Labels to attach to reported metrics. Recommended: "source=$SOURCE".
     #[arg(long = "metrics-label", value_name = "KEY=VALUE")]
     metrics_labels: Vec<MetricsLabel>,
+
+    /// Command to run.
+    #[command(subcommand)]
+    cmd: Option<Command>,
+}
+
+/// Subcommands for geocode-csv.
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Start in server mode.
+    Server {
+        /// Address that the server should listen on.
+        #[arg(long = "listen-address", default_value = "127.0.0.1:8787")]
+        listen_address: String,
+    },
 }
 
 // Our main entrypoint. We rely on the fact that `anyhow::Error` has a `Debug`
@@ -248,14 +265,23 @@ async fn main() -> Result<()> {
         geocoder = Box::new(Normalizer::new(geocoder));
     }
 
-    // Call our geocoder.
-    let result = geocode_stdio(
-        spec,
-        Arc::from(geocoder),
-        opt.on_duplicate_columns,
-        opt.max_retries,
-    )
-    .await;
+    // Decide which command to run.
+    let result = match opt.cmd {
+        // Run in server mode.
+        Some(Command::Server { listen_address }) => {
+            run_server(&listen_address, geocoder).await
+        }
+        // Run in CLI pipeline mode.
+        None => {
+            geocode_stdio(
+                spec,
+                Arc::from(geocoder),
+                opt.on_duplicate_columns,
+                opt.max_retries,
+            )
+            .await
+        }
+    };
 
     // Report our metrics.
     if let Err(err) = metrics_handle.report().await {

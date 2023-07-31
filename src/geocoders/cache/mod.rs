@@ -179,6 +179,7 @@ impl Geocoder for Cache {
         drop(cache_results);
 
         // If we have any cache misses, deal with them.
+        // TODO: Fail on cache missthrough argument
         if !cache_misses.is_empty() {
             // Pass remainder through to our inner geocoder.
             let cache_miss_retries =
