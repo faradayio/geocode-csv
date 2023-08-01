@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.8] - 2023-08-01
+
+### Added
+
+- `geocode-csv server` will now start a basic, experimental REST server.
+- The `--cache-hits-only` flag can be used to bypass geocoding for a given backend where we're only interested normalizing addresses we already know about.
+
 ## [1.3.7] - 2023-05-22
 
 ### Added
