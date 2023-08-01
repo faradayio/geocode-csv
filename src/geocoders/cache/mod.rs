@@ -35,7 +35,7 @@ pub struct Cache {
     output_keys: bool,
 
     /// Should we geocode cache misses?
-    skip_cache_misses: bool,
+    cache_hits_only: bool,
 
     /// The column names we output.
     column_names: Vec<String>,
@@ -48,7 +48,7 @@ impl Cache {
         key_value_store: Box<dyn KeyValueStore>,
         inner: Box<dyn Geocoder>,
         output_keys: bool,
-        skip_cache_misses: bool
+        cache_hits_only: bool,
     ) -> Result<Cache> {
         describe_counter!("geocodecsv.cache_hits.total", "Addresses found in cache");
         describe_counter!(
@@ -69,7 +69,7 @@ impl Cache {
             inner_cache_prefix,
             output_keys,
             column_names,
-            skip_cache_misses,
+            cache_hits_only,
         })
     }
 }
@@ -184,7 +184,9 @@ impl Geocoder for Cache {
         drop(cache_results);
 
         // If we have any cache misses, deal with them.
-        if !cache_misses.is_empty() && !self.skip_cache_misses {
+        // Alternatively, if the caller specified --cache-hits-only,
+        // we should avoid geocoding any remaining addresses.
+        if !cache_misses.is_empty() && !self.cache_hits_only {
             // Pass remainder through to our inner geocoder.
             let cache_miss_retries =
                 self.inner.geocode_addresses(&cache_misses).await?;
