@@ -127,6 +127,10 @@ struct Opt {
     #[arg(long = "cache", value_name = "CACHE_URL")]
     cache_url: Option<Url>,
 
+    /// Whether or not cache misses should be geocoded.
+    #[arg(long = "skip-cache-misses")]
+    skip_cache_misses: bool,
+
     /// Include cache keys in the output. Mostly useful for debugging.
     #[arg(long = "cache-output-keys")]
     cache_output_keys: bool,
@@ -252,7 +256,7 @@ async fn main() -> Result<()> {
             <dyn KeyValueStore>::new_from_url(cache_url.to_owned(), cache_key_prefix)
                 .await?;
         geocoder = Box::new(
-            Cache::new(key_value_store, geocoder, opt.cache_output_keys).await?,
+            Cache::new(key_value_store, geocoder, opt.cache_output_keys, opt.skip_cache_misses).await?,
         );
     }
 
