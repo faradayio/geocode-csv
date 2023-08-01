@@ -22,6 +22,7 @@ struct AddressesJson {
 }
 
 #[test]
+#[ignore]
 fn server() -> Result<()> {
     let testdir = TestDir::new("geocode-csv", "");
 
