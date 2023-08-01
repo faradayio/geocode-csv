@@ -13,7 +13,8 @@ use std::{
 use crate::{geocoders::Geocoder, Result};
 
 /// An address record that we can pass to a geocoder.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Address {
     /// Either the street, or the entire address as a string. This must always
     /// be present.

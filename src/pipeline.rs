@@ -57,11 +57,11 @@ pub enum OnDuplicateColumns {
 }
 
 /// Data about the CSV file that we include with every chunk to be geocoded.
-struct Shared {
+pub struct Shared {
     /// Which columns contain addresses that we need to geocode?
-    spec: AddressColumnSpec<usize>,
+    pub spec: AddressColumnSpec<usize>,
     /// The header of the output CSV file.
-    out_headers: StringRecord,
+    pub out_headers: StringRecord,
 }
 
 /// We use an atomic counter to keep track of how many chunks currently exist.
@@ -72,11 +72,11 @@ struct Shared {
 static TOTAL_CHUNKS_EXISTING: AtomicI64 = AtomicI64::new(0);
 
 /// A chunk to geocode.
-struct Chunk {
+pub struct Chunk {
     /// Shared information about the CSV file, including headers.
-    shared: Arc<Shared>,
+    pub shared: Arc<Shared>,
     /// The rows to geocode.
-    rows: Vec<StringRecord>,
+    pub rows: Vec<StringRecord>,
 }
 
 impl Chunk {
@@ -411,7 +411,7 @@ async fn geocode_message(
     skip_all,
     fields(rows = chunk.rows.len())
 )]
-async fn geocode_chunk(
+pub async fn geocode_chunk(
     geocoder: &dyn Geocoder,
     mut chunk: Chunk,
     max_retries: u8,

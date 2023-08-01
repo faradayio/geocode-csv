@@ -52,6 +52,14 @@ You can geocode multiple addresses per row as follows:
 
 This will insert two sets of columns, one beginning with `geocoded_shipping_` and the other with `geocoded_billing_`.
 
+## Build
+
+You'll need to run
+
+```bash
+git submodule update --init
+```
+
 ## A note about Macs
 
 We provide pre-built Mac binaries for Intel- and M1-based Macs. These binaries use "ad-hoc" signatures, so you may need to [set appropriate security settings](https://support.apple.com/en-us/HT202491) or run:
