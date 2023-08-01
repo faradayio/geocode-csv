@@ -24,7 +24,7 @@ fn path_as_c_string(path: &Path) -> Result<CString> {
     Ok(c_str.to_owned())
 }
 
-///! Support for initializing `libpostal`.
+/// Support for initializing `libpostal`.
 pub(crate) unsafe fn initialize_libpostal(
     state: &mut InitializationState,
 ) -> Result<()> {
@@ -40,7 +40,7 @@ pub(crate) unsafe fn initialize_libpostal(
     Ok(())
 }
 
-///! Support for initializing `libpostal`'s parser module.
+/// Support for initializing `libpostal`'s parser module.
 pub(crate) unsafe fn initialize_libpostal_parser(
     state: &mut InitializationState,
 ) -> Result<()> {
@@ -58,7 +58,7 @@ pub(crate) unsafe fn initialize_libpostal_parser(
     Ok(())
 }
 
-///! Support for initializing `libpostal`'s parser module.
+/// Support for initializing `libpostal`'s parser module.
 pub(crate) unsafe fn initialize_libpostal_language_classifier(
     state: &mut InitializationState,
 ) -> Result<()> {
