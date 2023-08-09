@@ -52,7 +52,7 @@ pub struct LibPostal {
 
 impl LibPostal {
     /// Create a new LibPostal geocoder.
-    pub fn new(prime: bool) -> LibPostal {
+    pub fn new() -> LibPostal {
         describe_counter!(
             "geocodecsv.addresses_parsed.total",
             "Total addresses parsed"
@@ -62,18 +62,17 @@ impl LibPostal {
             .iter()
             .map(|&name| name.to_owned())
             .collect::<Vec<_>>();
-        let libpostal = LibPostal { column_names };
-        if prime {
-            // The result here isn't useful, we just need to get libpostal to load
-            // its model into memory.
-            let _ = libpostal.geocode_addresses(&[Address {
-                street: "1 Main St".to_owned(),
-                city: Some("Anytown".to_owned()),
-                state: Some("VT".to_owned()),
-                zipcode: None,
-            }]);
-        }
-        libpostal
+        LibPostal { column_names }
+    }
+
+    pub async fn prime() {
+        let libpostal = LibPostal::new();
+        let _ = libpostal.geocode_addresses(&[Address {
+            street: "1 Main St".to_owned(),
+            city: Some("Anytown".to_owned()),
+            state: Some("VT".to_owned()),
+            zipcode: None,
+        }]).await;
     }
 }
 
