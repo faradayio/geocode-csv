@@ -64,7 +64,9 @@ impl LibPostal {
             .collect::<Vec<_>>();
         let libpostal = LibPostal { column_names };
         if prime {
-            libpostal.geocode_addresses(&[Address {
+            // The result here isn't useful, we just need to get libpostal to load
+            // its model into memory.
+            let _ = libpostal.geocode_addresses(&[Address {
                 street: "1 Main St".to_owned(),
                 city: Some("Anytown".to_owned()),
                 state: Some("VT".to_owned()),

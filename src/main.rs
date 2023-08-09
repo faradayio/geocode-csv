@@ -252,7 +252,7 @@ async fn main() -> Result<()> {
             rate_limiter.clone(),
             shared_http_client(CONCURRENCY),
         )?),
-        GeocoderName::LibPostal => Box::new(LibPostal::new(prime.clone())),
+        GeocoderName::LibPostal => Box::new(LibPostal::new(prime)),
     };
 
     // If we were asked, place a cache in front.
@@ -282,7 +282,7 @@ async fn main() -> Result<()> {
 
     // If we were asked, normalize addresses a bit first.
     if opt.normalize {
-        geocoder = Box::new(Normalizer::new(geocoder, prime.clone()));
+        geocoder = Box::new(Normalizer::new(geocoder, prime));
     }
 
     // Decide which command to run.
