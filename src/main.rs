@@ -234,6 +234,16 @@ async fn main() -> Result<()> {
         )
     });
 
+    // If we're running in server mode, then prime by default.
+    // "Prime" in this case means to run a fake address through libpostal,
+    // to force it to pre-emptively load its language model into memory.
+    // This can take 5-10 seconds, and we'd prefer that it happens as
+    // part of application startup, rather than at the time of the first request.
+    let prime = match opt.cmd {
+        Some(Command::Server { .. }) => true,
+        None => false,
+    };
+
     // Choose our main geocoding client.
     let mut geocoder: Box<dyn Geocoder> = match opt.geocoder {
         GeocoderName::Smarty => Box::new(Smarty::new(
@@ -242,7 +252,7 @@ async fn main() -> Result<()> {
             rate_limiter.clone(),
             shared_http_client(CONCURRENCY),
         )?),
-        GeocoderName::LibPostal => Box::new(LibPostal::new()),
+        GeocoderName::LibPostal => Box::new(LibPostal::new(prime.clone())),
     };
 
     // If we were asked, place a cache in front.
@@ -272,7 +282,7 @@ async fn main() -> Result<()> {
 
     // If we were asked, normalize addresses a bit first.
     if opt.normalize {
-        geocoder = Box::new(Normalizer::new(geocoder));
+        geocoder = Box::new(Normalizer::new(geocoder, prime.clone()));
     }
 
     // Decide which command to run.

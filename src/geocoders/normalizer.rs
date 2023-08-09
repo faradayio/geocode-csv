@@ -26,13 +26,13 @@ pub struct Normalizer {
 
 impl Normalizer {
     /// Create a new `Normalizer` wrapping the specified geocoder.
-    pub fn new(inner: Box<dyn Geocoder>) -> Normalizer {
+    pub fn new(inner: Box<dyn Geocoder>, prime: bool) -> Normalizer {
         describe_counter!(
             "geocodecsv.addresses_normalized.total",
             "Addresses changed by normalization"
         );
 
-        let libpostal = LibPostal::new();
+        let libpostal = LibPostal::new(prime);
         let mut libpostal_component_indices = HashMap::new();
         for (i, column_name) in libpostal.column_names().iter().enumerate() {
             libpostal_component_indices.insert(column_name.to_owned(), i);
