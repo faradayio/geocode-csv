@@ -279,6 +279,10 @@ async fn main() -> Result<()> {
     let result = match opt.cmd {
         // Run in server mode.
         Some(Command::Server { listen_address }) => {
+            // If we're running in server mode, then prime libpostal to load its
+            // model and data into memory. This can take 5-10 seconds,
+            // and we'd prefer that it happens as part of application startup,
+            // rather than at the time of the first request.
             LibPostal::prime().await;
             run_server(&listen_address, geocoder).await
         }

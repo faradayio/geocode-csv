@@ -66,6 +66,8 @@ impl LibPostal {
     }
 
     pub async fn prime() {
+        /// "Prime" libpostal by forcing it to load its language model and associated data
+        /// into memory with a dummy call.
         let libpostal = LibPostal::new();
         let _ = libpostal.geocode_addresses(&[Address {
             street: "1 Main St".to_owned(),
