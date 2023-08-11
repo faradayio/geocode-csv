@@ -64,6 +64,20 @@ impl LibPostal {
             .collect::<Vec<_>>();
         LibPostal { column_names }
     }
+
+    pub async fn prime() {
+        // "Prime" libpostal by forcing it to load its language model and associated data
+        // into memory with a dummy call.
+        let libpostal = LibPostal::new();
+        let _ = libpostal
+            .geocode_addresses(&[Address {
+                street: "1 Main St".to_owned(),
+                city: Some("Anytown".to_owned()),
+                state: Some("VT".to_owned()),
+                zipcode: None,
+            }])
+            .await;
+    }
 }
 
 #[async_trait]
