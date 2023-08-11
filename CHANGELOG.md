@@ -4,9 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.10] - 2023-08-11
+
+### Fixed
+
+- In server mode, "prime" libpostal so that it doesn't take forever to process the first request.
+
 ## [1.3.9] - 2023-08-01
 
-#### Fixed
+### Fixed
 
 - Fix build by ignoring test that requires libpostal data.
 
