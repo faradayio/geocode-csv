@@ -34,6 +34,9 @@ metrics-util = "0.14.0"
 opinionated_metrics = { version = "0.2.0", path = "crates/opinionated_metrics" }
 redis = { version = "0.22.1", default-features = false, features = ["aio", "tokio-comp"] }
 serde = { version = "1.0.92", features = ["derive"] }
+# Last version of `serde_derive` that can be built from source. See
+# https://github.com/serde-rs/serde/issues/2538.
+serde_derive = "=1.0.171"
 # IMPORTANT: We require `preserve_order` to correctly handle "structure" JSON
 # specifications in a way that puts the right data in the right output columns.
 serde_json = { version = "1.0.39", features = ["preserve_order"] }

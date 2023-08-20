@@ -50,9 +50,11 @@ license-files = [
 multiple-versions = "warn"
 
 deny = [
-    # This never causes anything but portability misery. But we currently need
-    # it for bigtable_rs.
+    # This never causes anything but portability misery.
     { name = "openssl-sys" },
+    # `serde_derive` has started shipping unreproduceable binary builds.
+    # See https://github.com/serde-rs/serde/issues/2538.
+    { name = "serde_derive", version = ">1.0.171" },
 ]
 
 skip = [
