@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.11] - 2023-08-20
+
+### Security
+
+- Roll back `serde_derive` to version 1.0.171 and pin it there, to avoid using [the new `serde_derive` that uses a pre-built binary compiler plugin](https://github.com/serde-rs/serde/issues/2538). The binary plugin has not been successfully reproduced from source when I last looked, and it represents an unacceptable security risk, since it can't be audited without disassembling the binary code. We'll need a longer-term plan for this.
+
 ## [1.3.10] - 2023-08-11
 
 ### Fixed
