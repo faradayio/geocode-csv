@@ -54,10 +54,22 @@ This will insert two sets of columns, one beginning with `geocoded_shipping_` an
 
 ## Build
 
-You'll need to run
+You'll need to run:
 
 ```bash
 git submodule update --init
+```
+
+...to pull in the C++ source for `libpostal`.
+
+You will also need to [install `protoc`](https://grpc.io/docs/protoc-installation/):
+
+```bash
+# Linux.
+sudo apt install protobuf-compiler
+
+# Mac.
+brew install protobuf
 ```
 
 ## A note about Macs
