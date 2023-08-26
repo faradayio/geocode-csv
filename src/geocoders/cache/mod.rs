@@ -159,14 +159,27 @@ impl Geocoder for Cache {
                             self.column_names(),
                         ));
                     }
-                    geocoded[i] = Some(Geocoded {
+                    let candidate = Geocoded {
                         column_values: cache_hit,
-                    });
-                    counter!(
-                        "geocodecsv.cache_hits.total",
-                        1,
-                        "geocoding_result" => "found"
-                    );
+                    };
+                    if candidate.contains_null_bytes() {
+                        // This result contains old buggy data. Treat as a cache
+                        // miss.
+                        cache_misses.push(addresses[i].clone());
+                        cache_miss_offsets.push(i);
+                        counter!(
+                            "geocodecsv.cache_hits.total",
+                            1,
+                            "geocoding_result" => "invalid_data"
+                        );
+                    } else {
+                        geocoded[i] = Some(candidate);
+                        counter!(
+                            "geocodecsv.cache_hits.total",
+                            1,
+                            "geocoding_result" => "found"
+                        );
+                    }
                 } else {
                     counter!(
                         "geocodecsv.cache_hits.total",

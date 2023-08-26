@@ -101,6 +101,13 @@ pub struct Geocoded {
     pub column_values: Vec<String>,
 }
 
+impl Geocoded {
+    /// Does this address contain any `\0` bytes?
+    pub fn contains_null_bytes(&self) -> bool {
+        self.column_values.iter().any(|s| s.contains('\0'))
+    }
+}
+
 /// Abstract geocoding interface.
 #[async_trait]
 pub trait Geocoder: Send + Sync + 'static {

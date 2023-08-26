@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::format_err;
 use async_trait::async_trait;
 use leaky_bucket::RateLimiter;
 use metrics::{counter, describe_counter};
@@ -124,7 +125,13 @@ impl Geocoder for Smarty {
         for address_output in response.into_iter().flatten() {
             let column_values =
                 self.structure.value_columns_for(&address_output.fields)?;
-            geocoded[address_output.input_index] = Some(Geocoded { column_values });
+            let candidate = Geocoded { column_values };
+            if candidate.contains_null_bytes() {
+                return Err(format_err!(
+                    "Smarty returned a geocoded address with a null byte"
+                ));
+            }
+            geocoded[address_output.input_index] = Some(candidate);
         }
 
         Ok(geocoded)
