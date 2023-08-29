@@ -17,8 +17,6 @@ ignore = [
     # attack, but (1) we only connect to a few trusted SaaS hosts, and (2) the
     # worst case scenario is that we run too slowly.
     "RUSTSEC-2023-0052",
-    # Ditto, but in `rustls-webpki`.
-    "RUSTSEC-2023-0053",
 ]
 
 [licenses]
@@ -58,9 +56,9 @@ multiple-versions = "warn"
 deny = [
     # This never causes anything but portability misery.
     { name = "openssl-sys" },
-    # `serde_derive` has started shipping unreproduceable binary builds.
-    # See https://github.com/serde-rs/serde/issues/2538.
-    { name = "serde_derive", version = ">1.0.171" },
+    # `serde_derive` shipped unreproducible binary builds for a while. See
+    # https://github.com/serde-rs/serde/issues/2538.
+    { name = "serde_derive", version = ">1.0.171,<1.0.184" },
 ]
 
 skip = [
