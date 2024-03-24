@@ -19,6 +19,7 @@ pub mod cache;
 pub mod invalid_record_skipper;
 pub mod libpostal;
 pub mod normalizer;
+pub mod paired;
 pub mod smarty;
 
 /// A `hyper` client shared between multiple workers.
@@ -105,6 +106,13 @@ impl Geocoded {
     /// Does this address contain any `\0` bytes?
     pub fn contains_null_bytes(&self) -> bool {
         self.column_values.iter().any(|s| s.contains('\0'))
+    }
+
+    /// Concatenate two `Geocoded` values.
+    pub fn concat(&self, other: &Geocoded) -> Geocoded {
+        let mut column_values = self.column_values.clone();
+        column_values.extend(other.column_values.iter().cloned());
+        Geocoded { column_values }
     }
 }
 

@@ -9,7 +9,7 @@ use crate::{addresses::Address, Result};
 
 use super::{Geocoded, Geocoder};
 
-static COLUMN_NAMES: &[&str] = &[
+pub(crate) static COLUMN_NAMES: &[&str] = &[
     // From
     // https://github.com/OpenCageData/address-formatting/blob/master/conf/components.yaml.
     "archipelago",
