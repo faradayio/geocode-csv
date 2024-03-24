@@ -255,3 +255,37 @@ fn skip_records_with_empty_house_number_and_street() {
     assert!(output.stdout_str().contains("New York"));
     assert!(output.stdout_str().contains("Provo"));
 }
+
+#[test]
+#[ignore]
+fn append_libpostal() {
+    let testdir = TestDir::new("geocode-csv", "append_libpostal");
+
+    testdir.create_file(
+        "spec.json",
+        r#"{
+    "gc": {
+        "house_number_and_street": [
+            "address_1",
+            "address_2"
+        ],
+        "city": "city",
+        "state": "state",
+        "postcode": "zip_code"
+    }
+}"#,
+    );
+    let output = testdir
+        .cmd()
+        .arg("--license=us-core-enterprise-cloud")
+        .arg("--spec=spec.json")
+        .arg("--include-libpostal")
+        .output_with_stdin(SIMPLE_CSV)
+        .tee_output()
+        .expect_success();
+    assert!(output.stdout_str().contains("gc_addressee"));
+    assert!(output.stdout_str().contains("Commercial"));
+    assert!(output.stdout_str().contains("Residential"));
+    assert!(output.stdout_str().contains("40.21"));
+    assert!(output.stdout_str().contains("gc_libpostal_city"));
+}

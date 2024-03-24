@@ -33,7 +33,6 @@ mod pipeline;
 mod server;
 mod unpack_vec;
 
-use crate::addresses::AddressColumnSpec;
 use crate::geocoders::{
     cache::Cache, invalid_record_skipper::InvalidRecordSkipper, libpostal::LibPostal,
     normalizer::Normalizer, shared_http_client, smarty::Smarty, Geocoder,
@@ -42,6 +41,7 @@ use crate::geocoders::{
 use crate::key_value_stores::KeyValueStore;
 use crate::pipeline::{geocode_stdio, OnDuplicateColumns, CONCURRENCY, GEOCODE_SIZE};
 use crate::server::run_server;
+use crate::{addresses::AddressColumnSpec, geocoders::paired::Paired};
 
 #[cfg(all(feature = "jemallocator", not(target_env = "msvc")))]
 #[global_allocator]
@@ -142,6 +142,10 @@ struct Opt {
     /// Before processing addresses, normalize them using libpostal.
     #[arg(long = "normalize")]
     normalize: bool,
+
+    /// Include libpostal columns in addition to another geocoder's output.
+    #[arg(long = "include-libpostal")]
+    include_libpostal: bool,
 
     /// Limit the speed with which we access external geocoding APIs. Does not
     /// affect the cache or local geocoding.
@@ -273,6 +277,15 @@ async fn main() -> Result<()> {
     // If we were asked, normalize addresses a bit first.
     if opt.normalize {
         geocoder = Box::new(Normalizer::new(geocoder));
+    }
+
+    // Include libpostal columns in the output if requested.
+    if opt.include_libpostal {
+        geocoder = Box::new(Paired::new(
+            geocoder,
+            "libpostal",
+            Box::new(LibPostal::new()),
+        ));
     }
 
     // Decide which command to run.
