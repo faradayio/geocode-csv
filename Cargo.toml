@@ -1,6 +1,6 @@
 [package]
 name = "geocode-csv"
-version = "1.3.12"
+version = "1.4.0"
 authors = ["Eric Kidd <git@randomhacks.net>"]
 edition = "2018"
 
@@ -12,12 +12,21 @@ documentation = "https://github.com/faradayio/geocode-csv"
 
 [dev-dependencies]
 cli_test_dir = "0.1.7"
-reqwest = { version = "0.11.18", default-features = false, features = ["blocking"] }
+reqwest = { version = "0.11.18", default-features = false, features = [
+    "blocking",
+] }
 
 [dependencies]
 anyhow = { version = "1.0.40", features = ["backtrace"] }
 async-trait = "0.1.52"
-axum = { version = "0.6.19", default-features = false, features = ["http1", "tokio", "tower-log", "tracing", "headers", "json"] }
+axum = { version = "0.6.19", default-features = false, features = [
+    "http1",
+    "tokio",
+    "tower-log",
+    "tracing",
+    "headers",
+    "json",
+] }
 bb8 = "0.8.0"
 bb8-redis = "0.13.1"
 bigtable_rs = "0.2.5"
@@ -26,7 +35,10 @@ clap = { version = "4.3.0", features = ["derive", "wrap_help"] }
 csv = "1.0.7"
 futures = "0.3.4"
 hyper = { version = "0.14.7", features = ["client", "http2", "stream"] }
-hyper-rustls = { version = "0.24.1", features = ["rustls-native-certs", "http2"] }
+hyper-rustls = { version = "0.24.1", features = [
+    "rustls-native-certs",
+    "http2",
+] }
 leaky-bucket = "1.0.1"
 libpostal-rust = { version = "0.1.1", path = "crates/libpostal-rust" }
 # These need to be updated alongside `opinionated_metrics` and its supporting
@@ -34,7 +46,10 @@ libpostal-rust = { version = "0.1.1", path = "crates/libpostal-rust" }
 metrics = "0.20.1"
 metrics-util = "0.14.0"
 opinionated_metrics = { version = "0.2.0", path = "crates/opinionated_metrics" }
-redis = { version = "0.23.2", default-features = false, features = ["aio", "tokio-comp"] }
+redis = { version = "0.23.2", default-features = false, features = [
+    "aio",
+    "tokio-comp",
+] }
 serde = { version = "1.0.92", features = ["derive"] }
 # Last version of `serde_derive` that can be built from source. See
 # https://github.com/serde-rs/serde/issues/2538.
@@ -45,7 +60,12 @@ serde_json = { version = "1.0.39", features = ["preserve_order"] }
 sha2 = "0.10.1"
 strum = "0.25.0"
 strum_macros = "0.25.2"
-tokio = { version = "1.6.0", features = ["io-util", "macros", "rt-multi-thread", "sync"] }
+tokio = { version = "1.6.0", features = [
+    "io-util",
+    "macros",
+    "rt-multi-thread",
+    "sync",
+] }
 tokio-stream = "0.1.6"
 tracing = "0.1.29"
 tracing-subscriber = { version = "0.3.7", features = ["env-filter"] }
@@ -59,4 +79,9 @@ jemallocator = { version = "0.5.4", features = ["profiling"], optional = true }
 # split-debuginfo = "off"
 
 [workspace]
-members = ["crates/libpostal-sys", "crates/libpostal-rust", "crates/metrics-exporter-newrelic", "crates/opinionated_metrics"]
+members = [
+    "crates/libpostal-sys",
+    "crates/libpostal-rust",
+    "crates/metrics-exporter-newrelic",
+    "crates/opinionated_metrics",
+]
