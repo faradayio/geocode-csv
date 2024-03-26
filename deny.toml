@@ -3,21 +3,7 @@
 # These policies can be enforced using `cargo deny check`.
 
 [advisories]
-ignore = [
-    # Ignore a nasty `localtime_r` and `setenv` race condition which can
-    # segfault if we try to read the localtime while someone is setting an env
-    # var.
-    #
-    # This can probably be fixed once
-    # https://github.com/chronotope/chrono/issues/602 has been addressed.
-    #"RUSTSEC-2020-0159",
-    # Also `localtime_r`.
-    "RUSTSEC-2020-0071",
-    # Exponential CPU usage in `webpki` could be used in a denial of service
-    # attack, but (1) we only connect to a few trusted SaaS hosts, and (2) the
-    # worst case scenario is that we run too slowly.
-    "RUSTSEC-2023-0052",
-]
+ignore = []
 
 [licenses]
 # Don't allow code with an unclear license.
@@ -27,7 +13,17 @@ unlicensed = "deny"
 copyleft = "deny"
 
 # Allow common non-restrictive licenses.
-allow = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "CC0-1.0", "ISC", "MPL-2.0", "OpenSSL", "Unicode-DFS-2016"]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CC0-1.0",
+    "ISC",
+    "MPL-2.0",
+    "OpenSSL",
+    "Unicode-DFS-2016",
+]
 
 # Many organizations ban AGPL-licensed code
 # https://opensource.google/docs/using/agpl-policy/
@@ -38,16 +34,12 @@ deny = ["AGPL-3.0"]
 # to native-tls everywhere, and not mix the two.
 name = "ring"
 expression = "ISC AND OpenSSL AND MIT"
-license-files = [
-    { path = "LICENSE", hash = 3171872035 },
-]
+license-files = [{ path = "LICENSE", hash = 3171872035 }]
 
 [[licenses.clarify]]
 name = "encoding_rs"
 expression = "(MIT OR Apache-2.0) AND BSD-3-Clause AND CC0-1.0"
-license-files = [
-    { path = "COPYRIGHT", hash = 972598577 },
-]
+license-files = [{ path = "COPYRIGHT", hash = 972598577 }]
 
 [bans]
 # Warn about multiple versions of the same crate, unless we've indicated otherwise below.
@@ -62,15 +54,11 @@ deny = [
 ]
 
 skip = [
-    # clap v2.33.0 still uses an older version.
-    { name = "strsim", version = "0.8.0" },
-    # Parts of the ecosystem still use the older version.
-    { name = "itoa", version = "0.4.8" },
+    # This seems to be included by portable-atomic 0.3.20 for some reason.
+    { name = "portable-atomic", version = "1.6.0" },
 ]
 
 skip-tree = [
     # This has a bunch of old dependencies.
-    { name = "bigtable_rs" }
+    { name = "bigtable_rs" },
 ]
-
-
