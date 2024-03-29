@@ -32,7 +32,7 @@ pub(crate) unsafe fn initialize_libpostal(
         let _span = debug_span!("libpostal_setup_datadir").entered();
         let datadir = probe_data_directory()?;
         let datadir_c_string = path_as_c_string(&datadir)?;
-        if !libpostal_setup_datadir(datadir_c_string.as_ptr() as *mut i8) {
+        if !libpostal_setup_datadir(datadir_c_string.as_ptr() as *mut _) {
             return Err(Error::InitializationFailed { component: "base" });
         }
         state.initialized = true;
@@ -48,7 +48,7 @@ pub(crate) unsafe fn initialize_libpostal_parser(
         let _span = debug_span!("libpostal_setup_parser_datadir").entered();
         let datadir = probe_data_directory()?;
         let datadir_c_string = path_as_c_string(&datadir)?;
-        if !libpostal_setup_parser_datadir(datadir_c_string.as_ptr() as *mut i8) {
+        if !libpostal_setup_parser_datadir(datadir_c_string.as_ptr() as *mut _) {
             return Err(Error::InitializationFailed {
                 component: "parser",
             });
@@ -68,7 +68,7 @@ pub(crate) unsafe fn initialize_libpostal_language_classifier(
         let datadir = probe_data_directory()?;
         let datadir_c_string = path_as_c_string(&datadir)?;
         if !libpostal_setup_language_classifier_datadir(
-            datadir_c_string.as_ptr() as *mut i8
+            datadir_c_string.as_ptr() as *mut _
         ) {
             return Err(Error::InitializationFailed {
                 component: "language classifier",
