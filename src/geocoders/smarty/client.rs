@@ -137,7 +137,7 @@ async fn street_addresses_impl(
             // Errors that occur here are being reported by our local HTTP
             // stack, not the remote server.
             let desc = hyper_error_description_for_metrics(&err);
-            counter!("geocodecsv.selected_errors.count", 1, "component" => "smarty", "cause" => desc);
+            counter!("geocodecsv.selected_errors.count", "component" => "smarty", "cause" => desc).increment(1);
             return Err(err.into());
         }
     };
@@ -149,10 +149,8 @@ async fn street_addresses_impl(
         body_data.extend(&chunk[..]);
     }
 
-    histogram!(
-        "geocodecsv.smarty.geocode_request.duration_seconds",
-        (Instant::now() - start).as_secs_f64(),
-    );
+    histogram!("geocodecsv.smarty.geocode_request.duration_seconds")
+        .record((Instant::now() - start).as_secs_f64());
 
     // Check the request status.
     if status.is_success() {
@@ -162,7 +160,7 @@ async fn street_addresses_impl(
         // This error was reported by the remote server.
 
         // Add error to metrics.
-        counter!("geocodecsv.selected_errors.count", 1, "component" => "smarty", "cause" => status.to_string());
+        counter!("geocodecsv.selected_errors.count", "component" => "smarty", "cause" => status.to_string()).increment(1);
 
         // Log information about bad street fields, if we can.
         if status == 422 {

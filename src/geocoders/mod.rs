@@ -1,6 +1,6 @@
 //! Geocoding backends.
 
-use std::{fmt, iter::repeat, str::FromStr, sync::Arc};
+use std::{fmt, str::FromStr, sync::Arc};
 
 use anyhow::format_err;
 use async_trait::async_trait;
@@ -177,6 +177,6 @@ pub trait Geocoder: Send + Sync + 'static {
     /// Copy empty values into `geocoded`, one for each column that this
     /// geocoder would produce.
     fn add_empty_columns_to_row(&self, out_row: &mut StringRecord) {
-        out_row.extend(repeat("").take(self.column_names().len()));
+        out_row.extend(std::iter::repeat_n("", self.column_names().len()));
     }
 }

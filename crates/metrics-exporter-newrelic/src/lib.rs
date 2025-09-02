@@ -287,7 +287,7 @@ impl NewRelicRecorder {
     /// Install this recorder as the global default recorder.
     pub fn install(self) -> Result<NewRelicHandle, BuildError> {
         let handle = self.handle();
-        metrics::set_boxed_recorder(Box::new(self))?;
+        metrics::set_global_recorder(self)?;
         Ok(handle)
     }
 }
@@ -320,19 +320,27 @@ impl Recorder for NewRelicRecorder {
         // NewRelic does not use this information.
     }
 
-    fn register_counter(&self, key: &Key) -> Counter {
+    fn register_counter(
+        &self,
+        key: &Key,
+        _metadata: &metrics::Metadata<'_>,
+    ) -> Counter {
         self.inner
             .registry
             .get_or_create_counter(key, |c| c.clone().into())
     }
 
-    fn register_gauge(&self, key: &Key) -> Gauge {
+    fn register_gauge(&self, key: &Key, _metadata: &metrics::Metadata<'_>) -> Gauge {
         self.inner
             .registry
             .get_or_create_gauge(key, |c| c.clone().into())
     }
 
-    fn register_histogram(&self, key: &Key) -> Histogram {
+    fn register_histogram(
+        &self,
+        key: &Key,
+        _metadata: &metrics::Metadata<'_>,
+    ) -> Histogram {
         self.inner
             .registry
             .get_or_create_histogram(key, |c| c.clone().into())

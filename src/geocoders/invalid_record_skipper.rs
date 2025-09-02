@@ -54,7 +54,7 @@ impl Geocoder for InvalidRecordSkipper {
                 valid_addresses.push(address.clone());
                 original_indices.push(i);
             } else {
-                counter!("geocodecsv.invalid_records.total", 1);
+                counter!("geocodecsv.invalid_records.total").increment(1);
             }
         }
 

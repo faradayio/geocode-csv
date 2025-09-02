@@ -84,11 +84,8 @@ impl Geocoder for Normalizer {
                     if !normalized_address.eq_ignore_ascii_case(&addresses[i]) {
                         // Only count addresses that we've actually changed in
                         // some way.
-                        counter!(
-                            "geocodecsv.addresses_normalized.total",
-                            1,
-                            "normalizer" => "libpostal"
-                        );
+                        counter!("geocodecsv.addresses_normalized.total", "normalizer" => "libpostal")
+                            .increment(1);
                         trace!(
                             "normalized {:?} to {:?}",
                             &addresses[i],

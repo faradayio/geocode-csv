@@ -167,25 +167,16 @@ impl Geocoder for Cache {
                         // miss.
                         cache_misses.push(addresses[i].clone());
                         cache_miss_offsets.push(i);
-                        counter!(
-                            "geocodecsv.cache_hits.total",
-                            1,
-                            "geocoding_result" => "invalid_data"
-                        );
+                        counter!("geocodecsv.cache_hits.total", "geocoding_result" => "invalid_data")
+                            .increment(1);
                     } else {
                         geocoded[i] = Some(candidate);
-                        counter!(
-                            "geocodecsv.cache_hits.total",
-                            1,
-                            "geocoding_result" => "found"
-                        );
+                        counter!("geocodecsv.cache_hits.total", "geocoding_result" => "found")
+                            .increment(1);
                     }
                 } else {
-                    counter!(
-                        "geocodecsv.cache_hits.total",
-                        1,
-                        "geocoding_result" => "unknown_address"
-                    );
+                    counter!("geocodecsv.cache_hits.total", "geocoding_result" => "unknown_address")
+                        .increment(1);
                 }
             } else {
                 // We need to forward this result.
@@ -193,7 +184,7 @@ impl Geocoder for Cache {
                 cache_miss_offsets.push(i);
             }
         }
-        counter!("geocodecsv.cache_misses.total", cache_misses.len() as u64);
+        counter!("geocodecsv.cache_misses.total").increment(cache_misses.len() as u64);
         drop(cache_results);
 
         // If we have any cache misses, deal with them.

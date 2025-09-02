@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use leaky_bucket::RateLimiter;
 use metrics::describe_counter;
 use opinionated_metrics::Mode;
+
 use std::cmp::max;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -191,6 +192,11 @@ enum Command {
 // with an error.
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Initialize rustls crypto provider before any TLS operations.
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .map_err(|_| anyhow::anyhow!("Failed to install rustls crypto provider"))?;
+
     // Configure tracing.
     let filter = EnvFilter::from_default_env();
     Subscriber::builder()

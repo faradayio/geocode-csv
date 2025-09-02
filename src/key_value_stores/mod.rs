@@ -36,6 +36,7 @@ pub trait KeyValueStore: Send + Sync + 'static {
 
 impl dyn KeyValueStore {
     /// Create an appropriate `KeyValueStore` instance based on `url`.
+    #[allow(dead_code)]
     pub async fn new_from_url(
         url: Url,
         key_prefix: String,

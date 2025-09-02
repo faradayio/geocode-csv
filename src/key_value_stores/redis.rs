@@ -104,10 +104,8 @@ impl<'store> PipelinedGet<'store> for RedisPipelinedGet<'store> {
             .await
             .context("could not fetch keys from Redis")?;
 
-        histogram!(
-            "geocodecsv.redis.get_request.duration_seconds",
-            (Instant::now() - start).as_secs_f64(),
-        );
+        histogram!("geocodecsv.redis.get_request.duration_seconds")
+            .record((Instant::now() - start).as_secs_f64());
 
         Ok(result)
     }
@@ -137,10 +135,8 @@ impl<'store> PipelinedSet<'store> for RedisPipelinedSet<'store> {
             .await
             .context("could not fetch keys from Redis")?;
 
-        histogram!(
-            "geocodecsv.redis.set_request.duration_seconds",
-            (Instant::now() - start).as_secs_f64(),
-        );
+        histogram!("geocodecsv.redis.set_request.duration_seconds")
+            .record((Instant::now() - start).as_secs_f64());
 
         Ok(result)
     }

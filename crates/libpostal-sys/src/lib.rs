@@ -6,6 +6,10 @@
 // Ignore test-only warnings caused by
 // https://github.com/rust-lang/rust-bindgen/issues/1651.
 #![cfg_attr(test, allow(deref_nullptr))]
+// Allow clippy warnings in generated bindgen code
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::ptr_offset_with_cast)]
+#![allow(clippy::useless_transmute)]
 
 use std::sync::{Arc, Mutex};
 
@@ -39,15 +43,8 @@ lazy_static! {
     }));
 }
 
-// We could use build.rs to automatically generate these bindings, then include
-//them like this. include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-
-// Assume our bindings were generated using:
-//
-//     bindgen wrapper.h -o src/bindings.rs
-//
-// See the README.md file.
-include!("bindings.rs");
+// Use build.rs to automatically generate these bindings
+include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 #[cfg(test)]
 mod tests {
@@ -97,7 +94,7 @@ mod tests {
                 CString::new("Quatre-vingt-douze Ave des Champs-Élysées")
                     .expect("CString::new failed");
             let normalization_options = libpostal_get_default_options();
-            let mut num_expansions: size_t = 0;
+            let mut num_expansions: usize = 0;
             let expansions = libpostal_expand_address(
                 street_address.as_ptr() as *mut _,
                 normalization_options,

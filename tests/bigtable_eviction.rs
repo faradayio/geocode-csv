@@ -164,6 +164,7 @@ impl MetricsData {
 struct GeocodingAnalysis {
     total_rows: usize,
     rows_with_gc_data: usize,
+    #[allow(dead_code)]
     raw_output: String,
 }
 

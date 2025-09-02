@@ -3,15 +3,11 @@
 # These policies can be enforced using `cargo deny check`.
 
 [advisories]
+version = 2
 ignore = []
 
 [licenses]
-# Don't allow code with an unclear license.
-unlicensed = "deny"
-
-# Don't allow "copylefted" licenses unless they're listed below.
-copyleft = "deny"
-
+version = 2
 # Allow common non-restrictive licenses.
 allow = [
     "MIT",
@@ -22,12 +18,9 @@ allow = [
     "ISC",
     "MPL-2.0",
     "OpenSSL",
-    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "Zlib"
 ]
-
-# Many organizations ban AGPL-licensed code
-# https://opensource.google/docs/using/agpl-policy/
-deny = ["AGPL-3.0"]
 
 [[licenses.clarify]]
 # Ring has a messy license. We should either commit 100% to ring everywhere, or
@@ -53,10 +46,10 @@ deny = [
     { name = "serde_derive", version = ">1.0.171,<1.0.184" },
 ]
 
-skip = [
-    # This seems to be included by portable-atomic 0.3.20 for some reason.
-    { name = "portable-atomic", version = "1.6.0" },
-]
+#skip = [
+#    # This seems to be included by portable-atomic 0.3.20 for some reason.
+#    { name = "portable-atomic", version = "1.6.0" },
+#]
 
 skip-tree = [
     # This has a bunch of old dependencies.

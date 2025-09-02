@@ -127,7 +127,8 @@ impl Geocoder for LibPostal {
             debug_assert_eq!(geocoded.column_values.len(), self.column_names().len());
             result.push(Some(geocoded));
         }
-        counter!("geocodecsv.addresses_parsed.total", result.len() as u64, "parser" => "libpostal");
+        counter!("geocodecsv.addresses_parsed.total", "parser" => "libpostal")
+            .increment(result.len() as u64);
         Ok(result)
     }
 }

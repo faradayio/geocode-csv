@@ -44,17 +44,21 @@ impl CacheCompressor {
 
     /// Compress `input` and append to `output`.
     pub fn compress(&self, input: &[u8], output: &mut Vec<u8>) -> Result<()> {
-        counter!("geocodecsv.compressor_input.bytes_total", input.len() as u64, "compressor" => "none");
+        counter!("geocodecsv.compressor_input.bytes_total", "compressor" => "none")
+            .increment(input.len() as u64);
         output.extend_from_slice(input);
-        counter!("geocodecsv.compressor_output.bytes_total", output.len() as u64, "compressor" => "none");
+        counter!("geocodecsv.compressor_output.bytes_total", "compressor" => "none")
+            .increment(output.len() as u64);
         Ok(())
     }
 
     /// Decompress `input` and store in `output`.
     pub fn decompress(&self, input: &[u8], output: &mut Vec<u8>) -> Result<()> {
-        counter!("geocodecsv.decompressor_input.bytes_total", input.len() as u64, "compressor" => "none");
+        counter!("geocodecsv.decompressor_input.bytes_total", "compressor" => "none")
+            .increment(input.len() as u64);
         output.extend_from_slice(input);
-        counter!("geocodecsv.decompressor_output.bytes_total", output.len() as u64, "compressor" => "none");
+        counter!("geocodecsv.decompressor_output.bytes_total", "compressor" => "none")
+            .increment(output.len() as u64);
         Ok(())
     }
 }

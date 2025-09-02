@@ -447,21 +447,21 @@ pub async fn geocode_chunk(
                     retry_wait.as_secs(),
                     err
                 );
-                counter!("geocodecsv.chunks_retried.total", 1);
+                counter!("geocodecsv.chunks_retried.total").increment(1);
                 sleep(retry_wait);
                 retry_wait *= 2;
             }
             Err(err) => {
-                counter!("geocodecsv.chunks_failed.total", 1);
+                counter!("geocodecsv.chunks_failed.total").increment(1);
                 return Err(err).context("geocoder error");
             }
             Ok(geocoded) => {
-                counter!("geocodecsv.chunks.total", 1);
+                counter!("geocodecsv.chunks.total").increment(1);
                 break geocoded;
             }
         }
     };
-    counter!("geocodecsv.addresses.total", addresses_len as u64);
+    counter!("geocodecsv.addresses.total").increment(addresses_len as u64);
     trace!("geocoded {} addresses", addresses_len);
 
     // Add address information to our output rows.

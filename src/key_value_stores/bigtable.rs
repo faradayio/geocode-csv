@@ -236,7 +236,7 @@ impl<'store> PipelinedGet<'store> for BigTablePipelinedGet<'store> {
             Ok(response) => response,
             Err(err) => {
                 let cause = bigtable_error_cause_for_metrics(&err);
-                counter!("geocodecsv.selected_errors.count", 1, "component" => "bigtable", "cause" => cause);
+                counter!("geocodecsv.selected_errors.count", "component" => "bigtable", "cause" => cause).increment(1);
                 return Err(err).context("error checking BigTable for cached values");
             }
         };
@@ -253,10 +253,8 @@ impl<'store> PipelinedGet<'store> for BigTablePipelinedGet<'store> {
             );
         }
 
-        histogram!(
-            "geocodecsv.bigtable.get_request.duration_seconds",
-            (Instant::now() - start).as_secs_f64(),
-        );
+        histogram!("geocodecsv.bigtable.get_request.duration_seconds")
+            .record((Instant::now() - start).as_secs_f64());
 
         // Build a vec to store our result, and a `HashMap` mapping keys to vec
         // indices. We have to be careful because keys might appear more than
@@ -325,9 +323,9 @@ impl<'store> PipelinedGet<'store> for BigTablePipelinedGet<'store> {
 
                 if should_evict {
                     counter!(
-                        "geocodecsv.bigtable.random_eviction.evicted_entries.total",
-                        1
-                    );
+                        "geocodecsv.bigtable.random_eviction.evicted_entries.total"
+                    )
+                    .increment(1);
                     trace!(
                         "evicting cache entry for key {:?}, age: {} seconds",
                         String::from_utf8_lossy(&key),
@@ -351,7 +349,7 @@ impl<'store> PipelinedGet<'store> for BigTablePipelinedGet<'store> {
                         let age_seconds = age_micros / 1_000_000;
 
                         if age_seconds >= config.min_age_seconds as i64 {
-                            counter!("geocodecsv.bigtable.random_eviction.eligible_entries.total", 1);
+                            counter!("geocodecsv.bigtable.random_eviction.eligible_entries.total").increment(1);
                         }
                     }
 
@@ -402,18 +400,17 @@ impl<'store> PipelinedSet<'store> for BigTablePipelinedSet<'store> {
         let request = MutateRowsRequest {
             table_name: client.get_full_table_name(&self.bigtable.table_name),
             app_profile_id: "".to_owned(), // Dave says this is what we want.
+            authorized_view_name: "".to_owned(),
             entries: self.entries.clone(),
         };
         if let Err(err) = client.mutate_rows(request).await {
             let cause = bigtable_error_cause_for_metrics(&err);
-            counter!("geocodecsv.selected_errors.count", 1, "component" => "bigtable", "cause" => cause);
+            counter!("geocodecsv.selected_errors.count", "component" => "bigtable", "cause" => cause).increment(1);
             return Err(err).context("error writing cached values to BigTable");
         }
 
-        histogram!(
-            "geocodecsv.bigtable.set_request.duration_seconds",
-            (Instant::now() - start).as_secs_f64(),
-        );
+        histogram!("geocodecsv.bigtable.set_request.duration_seconds")
+            .record((Instant::now() - start).as_secs_f64());
         Ok(())
     }
 }
@@ -438,5 +435,6 @@ fn bigtable_error_cause_for_metrics(err: &bigtable::Error) -> Cow<'static, str> 
         bigtable::Error::TimeoutError(_) => Cow::Borrowed("timeout"),
         bigtable::Error::ChunkError(_) => Cow::Borrowed("chunk"),
         bigtable::Error::GCPAuthError(_) => Cow::Borrowed("gcp auth"),
+        bigtable::Error::MetadataError(_) => Cow::Borrowed("metadata error"),
     }
 }
