@@ -1,7 +1,7 @@
 [package]
 name = "metrics-exporter-newrelic"
-version = "0.2.0"
-authors = ["Eric Kidd <git@randomhacks.net>"]
+version = "0.2.1"
+authors = ["Eric Kidd <git@randomhacks.net>", "Seamus Abshere <seamus@abshere.net>"]
 edition = "2021"
 
 description = "Basic `metrics` exporter for use with NewRelic"
