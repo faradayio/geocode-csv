@@ -6,7 +6,7 @@ use url::Url;
 
 use crate::Result;
 
-mod bigtable;
+pub mod bigtable;
 mod redis;
 
 /// A key/value store, like Redis or BigTable.
@@ -40,10 +40,23 @@ impl dyn KeyValueStore {
         url: Url,
         key_prefix: String,
     ) -> Result<Box<dyn KeyValueStore>> {
+        Self::new_from_url_with_bigtable_eviction(url, key_prefix, None).await
+    }
+
+    /// Create an appropriate `KeyValueStore` instance based on `url`, with optional BigTable eviction config.
+    pub async fn new_from_url_with_bigtable_eviction(
+        url: Url,
+        key_prefix: String,
+        bigtable_eviction_config: Option<bigtable::EvictionConfig>,
+    ) -> Result<Box<dyn KeyValueStore>> {
         match url.scheme() {
             "redis" => Ok(Box::new(redis::Redis::new(url, key_prefix).await?)),
             "bigtable" => {
-                Ok(Box::new(bigtable::BigTable::new(url, key_prefix).await?))
+                let mut bigtable = bigtable::BigTable::new(url, key_prefix).await?;
+                if let Some(config) = bigtable_eviction_config {
+                    bigtable.set_eviction_config(config);
+                }
+                Ok(Box::new(bigtable))
             }
             scheme => {
                 Err(format_err!("don't know how to connect to {}: URLs", scheme))

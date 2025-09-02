@@ -35,6 +35,15 @@ struct BigTableConfig {
     table_name: String,
 }
 
+/// Configuration for BigTable cache eviction.
+#[derive(Debug, Clone)]
+pub struct EvictionConfig {
+    /// Minimum age in seconds before entries can be evicted.
+    pub min_age_seconds: u64,
+    /// Probability (0.0 to 1.0) of evicting eligible entries.
+    pub eviction_rate: f64,
+}
+
 impl BigTableConfig {
     /// Parse our own fake "bigtable:" URL schema into configuration information.
     fn from_url(url: &Url) -> Result<BigTableConfig> {
@@ -90,12 +99,20 @@ pub struct BigTable {
 
     /// The prefix to use for our keys.
     key_prefix: String,
+
+    /// Optional eviction configuration.
+    eviction_config: Option<EvictionConfig>,
 }
 
 impl BigTable {
     /// Get a BigTable client.
     fn client(&self) -> BigTableClient {
         self.connection.client()
+    }
+
+    /// Set the eviction configuration for this BigTable instance.
+    pub fn set_eviction_config(&mut self, config: EvictionConfig) {
+        self.eviction_config = Some(config);
     }
 }
 
@@ -154,6 +171,7 @@ impl KeyValueStoreNew for BigTable {
             connection,
             table_name: config.table_name,
             key_prefix,
+            eviction_config: None,
         })
     }
 }
@@ -272,12 +290,51 @@ impl<'store> PipelinedGet<'store> for BigTablePipelinedGet<'store> {
                     ));
                 }
 
-                // Write this match to our result array.
-                let indices = row_key_indices
-                    .get(&key)
-                    .expect("we should always have a known key");
-                for idx in indices {
-                    result[*idx] = Some(row_cell.value.clone());
+                // Check if this entry should be evicted based on age and probability.
+                let should_evict = if let Some(ref config) =
+                    self.bigtable.eviction_config
+                {
+                    let now_micros = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_micros() as i64;
+
+                    let age_micros = now_micros - row_cell.timestamp_micros;
+                    let age_seconds = age_micros / 1_000_000;
+
+                    if age_seconds >= config.min_age_seconds as i64 {
+                        // Entry is old enough, check probability
+                        use rand::Rng;
+                        let mut rng = rand::thread_rng();
+                        let random_value: f64 = rng.gen();
+                        random_value < config.eviction_rate
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+
+                if should_evict {
+                    trace!(
+                        "evicting cache entry for key {:?}, age: {} seconds",
+                        String::from_utf8_lossy(&key),
+                        (std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_micros() as i64
+                            - row_cell.timestamp_micros)
+                            / 1_000_000
+                    );
+                    // Don't store the value in result, effectively treating it as a cache miss
+                } else {
+                    // Write this match to our result array.
+                    let indices = row_key_indices
+                        .get(&key)
+                        .expect("we should always have a known key");
+                    for idx in indices {
+                        result[*idx] = Some(row_cell.value.clone());
+                    }
                 }
             }
         }

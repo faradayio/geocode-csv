@@ -139,6 +139,14 @@ struct Opt {
     #[arg(long = "cache-key-prefix", requires = "cache_url")]
     cache_key_prefix: Option<String>,
 
+    /// BigTable cache eviction: minimum age in seconds before entries can be evicted.
+    #[arg(long = "bigtable-random-eviction-age")]
+    bigtable_random_eviction_age: Option<u64>,
+
+    /// BigTable cache eviction: probability (0.0 to 1.0) of evicting eligible entries.
+    #[arg(long = "bigtable-random-eviction-rate")]
+    bigtable_random_eviction_rate: Option<f64>,
+
     /// Before processing addresses, normalize them using libpostal.
     #[arg(long = "normalize")]
     normalize: bool,
@@ -239,6 +247,40 @@ async fn main() -> Result<()> {
     });
 
     // Choose our main geocoding client.
+    // Validate BigTable eviction arguments
+    let has_age = opt.bigtable_random_eviction_age.is_some();
+    let has_rate = opt.bigtable_random_eviction_rate.is_some();
+
+    if has_age || has_rate {
+        // Both age and rate must be specified together
+        if has_age != has_rate {
+            return Err(format_err!(
+                "--bigtable-random-eviction-age and --bigtable-random-eviction-rate must be used together"
+            ));
+        }
+
+        if let Some(cache_url) = &opt.cache_url {
+            if cache_url.scheme() != "bigtable" {
+                return Err(format_err!(
+                    "--bigtable-random-eviction-age and --bigtable-random-eviction-rate can only be used with --cache=bigtable://"
+                ));
+            }
+        } else {
+            return Err(format_err!(
+                "--bigtable-random-eviction-age and --bigtable-random-eviction-rate require --cache=bigtable://"
+            ));
+        }
+    }
+
+    if let Some(rate) = opt.bigtable_random_eviction_rate {
+        if !(0.0..=1.0).contains(&rate) {
+            return Err(format_err!(
+                "--bigtable-random-eviction-rate must be between 0.0 and 1.0, got {}",
+                rate
+            ));
+        }
+    }
+
     let mut geocoder: Box<dyn Geocoder> = match opt.geocoder {
         GeocoderName::Smarty => Box::new(Smarty::new(
             opt.match_strategy,
@@ -256,9 +298,31 @@ async fn main() -> Result<()> {
             .as_deref()
             .unwrap_or_default()
             .to_owned();
+        // Prepare BigTable eviction config if specified
+        let bigtable_eviction_config = if cache_url.scheme() == "bigtable" {
+            if let (Some(age), Some(rate)) = (
+                opt.bigtable_random_eviction_age,
+                opt.bigtable_random_eviction_rate,
+            ) {
+                use crate::key_value_stores::bigtable::EvictionConfig;
+                Some(EvictionConfig {
+                    min_age_seconds: age,
+                    eviction_rate: rate,
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let key_value_store =
-            <dyn KeyValueStore>::new_from_url(cache_url.to_owned(), cache_key_prefix)
-                .await?;
+            <dyn KeyValueStore>::new_from_url_with_bigtable_eviction(
+                cache_url.to_owned(),
+                cache_key_prefix,
+                bigtable_eviction_config,
+            )
+            .await?;
         geocoder = Box::new(
             Cache::new(
                 key_value_store,
