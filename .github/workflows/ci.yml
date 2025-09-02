@@ -83,7 +83,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y curl autotools-dev autoconf libtool pkg-config libicu-dev
-          # Install libpostal from source since it's not in apt
+          sudo mkdir -p /usr/local/share/libpostal
+          sudo chmod 755 /usr/local/share/libpostal
           git clone https://github.com/openvenues/libpostal
           cd libpostal
           ./bootstrap.sh
@@ -92,8 +93,6 @@ jobs:
           sudo make install
           sudo ldconfig
           # Ensure proper permissions for libpostal data directory
-          sudo mkdir -p /usr/local/share/libpostal
-          sudo chmod 755 /usr/local/share/libpostal
       - uses: arduino/setup-protoc@v3
         with:
           version: "25.1"
