@@ -49,12 +49,12 @@ jobs:
       - name: "Make release"
         id: create_release
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        uses: softprops/action-gh-release@v2
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
-          name: "${{ steps.extract_release_version.outputs.release_version }}"
+          release_name: "${{ steps.extract_release_version.outputs.release_version }}"
           body_path: RELEASE_BODY.md
 
   # We use a matrix to run our build on every supported platform.
@@ -75,41 +75,41 @@ jobs:
             host: x86_64-unknown-linux-musl
             cargo: cross
             os: ubuntu-latest
+          # - target: x86_64-apple-darwin
+          #   host: x86_64-apple-darwin
+          #   cargo: cargo
+          #   os: macos-latest
+          # - target: aarch64-apple-darwin
+          #   host: x86_64-apple-darwin
+          #   cargo: cargo
+          #   os: macos-latest
 
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Install libpostal dependencies
+      # See https://github.com/r-lib/actions/issues/243
+      - name: Install automake
+        if: runner.os == 'macOS'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y curl autotools-dev autoconf libtool pkg-config libicu-dev
-          sudo mkdir -p /usr/local/share/libpostal
-          sudo chmod 755 /usr/local/share/libpostal
-          sudo git clone https://github.com/openvenues/libpostal
-          cd libpostal
-          sudo ./bootstrap.sh
-          sudo ./configure --prefix=/usr/local
-          sudo make -j4
-          sudo make install
-          sudo ldconfig
-      - uses: arduino/setup-protoc@v3
-        with:
-          version: "25.1"
+          brew install automake
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rs/toolchain@v1
         with:
+          profile: minimal
           # We track latest stable Rust instead of hardcoding it because it
           # virtually never breaks old code.
           toolchain: stable
-          components: rustfmt, clippy, rust-src
-          targets: ${{ matrix.target }}
+          components: rustfmt, clippy
+          target: ${{ matrix.target }}
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - name: Install Just
         run: |
-          version=1.13.0
+          version=1.42.4
           basename=just-$version-${{ matrix.host }}
           curl -fLO https://github.com/casey/just/releases/download/$version/$basename.tar.gz
           tar xf $basename.tar.gz just
@@ -117,7 +117,7 @@ jobs:
           rm -rf $basename.tar.gz
       - name: Install cargo-deny
         run: |
-          version=0.16.1
+          version=0.18.4
           basename=cargo-deny-$version-${{ matrix.host }}
           curl -fLO https://github.com/EmbarkStudios/cargo-deny/releases/download/$version/$basename.tar.gz
           tar xf $basename.tar.gz
@@ -157,4 +157,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: ./${{ steps.build_release.outputs.release_file }}
+          upload_url: ${{ needs.create_release.outputs.upload_url }}
+          asset_path: ./${{ steps.build_release.outputs.release_file }}
+          asset_name: ${{ steps.build_release.outputs.release_file }}
+          asset_content_type: application/zip
