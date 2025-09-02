@@ -87,10 +87,13 @@ jobs:
           git clone https://github.com/openvenues/libpostal
           cd libpostal
           ./bootstrap.sh
-          ./configure
+          ./configure --prefix=/usr/local
           make -j4
           sudo make install
           sudo ldconfig
+          # Ensure proper permissions for libpostal data directory
+          sudo mkdir -p /usr/local/share/libpostal
+          sudo chmod 755 /usr/local/share/libpostal
       - uses: arduino/setup-protoc@v3
         with:
           version: "25.1"
