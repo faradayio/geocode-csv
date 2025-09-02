@@ -27,11 +27,13 @@ fn all_fields() {
     }
 }"#,
     );
+    let bigtable_cache_url = std::env::var("BIGTABLE_CACHE_URL")
+        .expect("BIGTABLE_CACHE_URL environment variable must be set");
     let output = testdir
         .cmd()
         .arg("--license=us-core-enterprise-cloud")
         .arg("--spec=spec.json")
-        .arg("--cache=bigtable://bigtable-297912/geocode1/geocode_csv_test")
+        .arg(format!("--cache={}", bigtable_cache_url))
         .arg("--bigtable-random-eviction-age=1")
         .arg("--bigtable-random-eviction-rate=1.0")
         .output_with_stdin(SIMPLE_CSV)
@@ -373,11 +375,13 @@ fn bigtable_cache_hit_test() {
     );
 
     // First run - should call Smarty API and cache the result
+    let bigtable_cache_url = std::env::var("BIGTABLE_CACHE_URL")
+        .expect("BIGTABLE_CACHE_URL environment variable must be set");
     let output1 = testdir
         .cmd()
         .arg("--license=us-core-enterprise-cloud")
         .arg("--spec=spec.json")
-        .arg("--cache=bigtable://bigtable-297912/geocode1/geocode_csv_test")
+        .arg(format!("--cache={}", bigtable_cache_url))
         .output_with_stdin(SIMPLE_CSV)
         .expect_success();
 
@@ -390,7 +394,7 @@ fn bigtable_cache_hit_test() {
         .cmd()
         .arg("--license=us-core-enterprise-cloud")
         .arg("--spec=spec.json")
-        .arg("--cache=bigtable://bigtable-297912/geocode1/geocode_csv_test")
+        .arg(format!("--cache={}", bigtable_cache_url))
         .output_with_stdin(SIMPLE_CSV)
         .expect_success();
 
@@ -402,7 +406,7 @@ fn bigtable_cache_hit_test() {
         .cmd()
         .arg("--license=us-core-enterprise-cloud")
         .arg("--spec=spec.json")
-        .arg("--cache=bigtable://bigtable-297912/geocode1/geocode_csv_test")
+        .arg(format!("--cache={}", bigtable_cache_url))
         .arg("--cache-hits-only")
         .output_with_stdin(SIMPLE_CSV)
         .expect_success();

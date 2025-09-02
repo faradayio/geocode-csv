@@ -17,7 +17,7 @@ use bigtable_rs::{
         MutateRowsRequest, Mutation, ReadRowsRequest, RowFilter, RowSet,
     },
 };
-use metrics::{counter, describe_histogram, histogram, Unit};
+use metrics::{counter, describe_counter, describe_histogram, histogram, Unit};
 use tracing::{instrument, trace};
 use url::Url;
 
@@ -154,6 +154,14 @@ impl KeyValueStoreNew for BigTable {
             "geocodecsv.bigtable.set_request.duration_seconds",
             Unit::Seconds,
             "Time required for BigTable MutateRows requests"
+        );
+        describe_counter!(
+            "geocodecsv.bigtable.random_eviction.evicted_entries.total",
+            "Number of cache entries evicted due to random eviction policy"
+        );
+        describe_counter!(
+            "geocodecsv.bigtable.random_eviction.eligible_entries.total",
+            "Number of cache entries that were eligible for eviction (met age requirement)"
         );
 
         let config = BigTableConfig::from_url(&url)?;
@@ -316,6 +324,10 @@ impl<'store> PipelinedGet<'store> for BigTablePipelinedGet<'store> {
                 };
 
                 if should_evict {
+                    counter!(
+                        "geocodecsv.bigtable.random_eviction.evicted_entries.total",
+                        1
+                    );
                     trace!(
                         "evicting cache entry for key {:?}, age: {} seconds",
                         String::from_utf8_lossy(&key),
@@ -328,6 +340,21 @@ impl<'store> PipelinedGet<'store> for BigTablePipelinedGet<'store> {
                     );
                     // Don't store the value in result, effectively treating it as a cache miss
                 } else {
+                    // If eviction config exists and entry was old enough, count as eligible
+                    if let Some(ref config) = self.bigtable.eviction_config {
+                        let now_micros = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_micros()
+                            as i64;
+                        let age_micros = now_micros - row_cell.timestamp_micros;
+                        let age_seconds = age_micros / 1_000_000;
+
+                        if age_seconds >= config.min_age_seconds as i64 {
+                            counter!("geocodecsv.bigtable.random_eviction.eligible_entries.total", 1);
+                        }
+                    }
+
                     // Write this match to our result array.
                     let indices = row_key_indices
                         .get(&key)
