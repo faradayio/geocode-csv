@@ -12,7 +12,9 @@ ignore = [
 
 [licenses]
 version = 2
-# Allow common non-restrictive licenses.
+# Allow common non-restrictive licenses. Do not allow OpenSSL: we refuse the
+# OpenSSL library itself, and we do not want `ring` (whose license includes
+# "OpenSSL") sneaking back in next to aws-lc-rs.
 allow = [
     "MIT",
     "Apache-2.0",
@@ -22,18 +24,9 @@ allow = [
     "CC0-1.0",
     "CDLA-Permissive-2.0",
     "ISC",
-    "MPL-2.0",
-    "OpenSSL",
     "Unicode-3.0",
     "Zlib"
 ]
-
-[[licenses.clarify]]
-# Ring has a messy license. We should either commit 100% to ring everywhere, or
-# to native-tls everywhere, and not mix the two.
-name = "ring"
-expression = "ISC AND OpenSSL AND MIT"
-license-files = [{ path = "LICENSE", hash = 3171872035 }]
 
 [[licenses.clarify]]
 name = "encoding_rs"
@@ -46,7 +39,9 @@ multiple-versions = "warn"
 
 deny = [
     # This never causes anything but portability misery.
+    { name = "openssl" },
     { name = "openssl-sys" },
+    { name = "native-tls" },
     # `serde_derive` shipped unreproducible binary builds for a while. See
     # https://github.com/serde-rs/serde/issues/2538.
     { name = "serde_derive", version = ">1.0.171,<1.0.184" },

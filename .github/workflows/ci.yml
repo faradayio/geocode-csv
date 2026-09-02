@@ -14,6 +14,9 @@ on:
     # Only run on pull requests against main.
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   # We run this job first, to create any GitHub release that we might need.
   # Creating a release can only be done once, so we need to split it out from
@@ -23,9 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_version: ${{ steps.extract_release_version.outputs.release_version }}
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
       - name: Extract release version
         id: extract_release_version
@@ -49,12 +50,9 @@ jobs:
       - name: "Make release"
         id: create_release
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref }}
-          release_name: "${{ steps.extract_release_version.outputs.release_version }}"
+          name: ${{ steps.extract_release_version.outputs.release_version }}
           body_path: RELEASE_BODY.md
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
 
@@ -94,7 +92,13 @@ jobs:
         run: |
           brew install automake
       - name: Install protoc
-        uses: arduino/setup-protoc@v3
+        run: |
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            brew install protobuf
+          else
+            sudo apt-get update
+            sudo apt-get install -y protobuf-compiler
+          fi
       # Checks-out our repository first so `rust-toolchain` is present when we
       # install Rust.
       - uses: actions/checkout@v4
@@ -149,13 +153,9 @@ jobs:
           release_file=geocode-csv_${{ needs.create_release.outputs.release_version }}_${{ matrix.target }}.zip
           zip -j $release_file target/${{ matrix.target }}/release/geocode-csv
           echo "release_file=$release_file" >> $GITHUB_OUTPUT
-      - name: Upload Release Asset
+      - name: Upload release asset
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: ./${{ steps.build_release.outputs.release_file }}
-          asset_name: ${{ steps.build_release.outputs.release_file }}
-          asset_content_type: application/zip
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" "${{ steps.build_release.outputs.release_file }}" --clobber
