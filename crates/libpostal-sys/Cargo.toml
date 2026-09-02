@@ -19,10 +19,9 @@ exclude = [
 ]
 
 [build-dependencies]
-autotools = "0.2"
+autotools = "0.2.7"
 # Updated bindgen to latest version to fix null pointer dereference issues
 bindgen = "0.72.1"
 
 [dependencies]
-lazy_static = "1.4.0"
 

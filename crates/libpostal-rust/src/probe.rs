@@ -2,11 +2,11 @@
 
 use std::{
     fs,
+    ops::Deref,
     path::{Path, PathBuf},
-    sync::RwLock,
+    sync::{LazyLock, RwLock},
 };
 
-use lazy_static::{__Deref, lazy_static};
 use tracing::{debug, error, trace};
 
 use crate::{Error, Result};
@@ -18,9 +18,8 @@ const EXPECTED_DATA_VERSION: &str = "v1";
 static DATA_DIR_PATHS: &[&str] =
     &["/usr/local/share/libpostal", "/usr/share/libpostal"];
 
-lazy_static! {
-    static ref DATA_DIRECTORY: RwLock<Option<PathBuf>> = RwLock::new(None);
-}
+static DATA_DIRECTORY: LazyLock<RwLock<Option<PathBuf>>> =
+    LazyLock::new(|| RwLock::new(None));
 
 /// Probe for a libpostal data directory, returning the path, if any.
 pub(crate) fn probe_data_directory() -> Result<PathBuf> {

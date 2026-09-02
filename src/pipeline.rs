@@ -8,7 +8,7 @@ use std::sync::atomic::AtomicI64;
 use std::{
     cmp::max, io, iter::FromIterator, sync::Arc, thread::sleep, time::Duration,
 };
-use strum_macros::EnumString;
+use strum::EnumString;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, error, instrument, trace, warn};

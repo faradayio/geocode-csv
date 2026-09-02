@@ -1,8 +1,8 @@
 [package]
 name = "geocode-csv"
-version = "1.4.1"
+version = "1.4.1-alpha.1"
 authors = ["Eric Kidd <git@randomhacks.net>", "Seamus Abshere <seamus@abshere.net>"]
-edition = "2018"
+edition = "2021"
 
 description = "CLI tool to bulk geocode CSV data using the Smarty API or libpostal"
 license = "Apache-2.0 OR MIT"
@@ -11,68 +11,58 @@ repository = "https://github.com/faradayio/geocode-csv"
 documentation = "https://github.com/faradayio/geocode-csv"
 
 [dev-dependencies]
-cli_test_dir = "^0.1.7"
-reqwest = { version = "^0.11.18", default-features = false, features = [
-    "blocking",
-] }
+cli_test_dir = "^0.1.8"
+reqwest = { version = "^0.13.4", default-features = false, features = ["blocking", "json", "rustls"] }
 
 [dependencies]
-anyhow = { version = "^1.0.40", features = ["backtrace"] }
-async-trait = "^0.1.52"
-axum = { version = "^0.6.19", default-features = false, features = [
+anyhow = { version = "^1.0.104", features = ["backtrace"] }
+async-trait = "^0.1.92"
+axum = { version = "^0.8.9", default-features = false, features = [
     "http1",
     "tokio",
     "tower-log",
     "tracing",
-    "headers",
     "json",
 ] }
-bb8 = "^0.8.0"
-bb8-redis = "^0.13.1"
-bigtable_rs = "^0.2.5"
-bincode = { version = "2.0.0-rc.2", features = ["serde"] }
-clap = { version = "^4.3.0", features = ["derive", "wrap_help"] }
-csv = "^1.0.7"
-futures = "^0.3.4"
-hyper = { version = "^0.14.7", features = ["client", "http2", "stream"] }
-hyper-rustls = { version = "^0.24.1", features = [
-    "rustls-native-certs",
-    "http2",
-] }
-leaky-bucket = "^1.0.1"
+bb8 = "^0.9.1"
+bb8-redis = "^0.26.0"
+bigtable_rs = "^0.4.1"
+googleapis-tonic-google-bigtable-v2 = "0.39.0"
+# bincode 3.0.0 on crates.io is a tombstone that only emits compile_error!.
+bincode = { version = "2.0.1", features = ["serde"] }
+clap = { version = "^4.6.6", features = ["derive", "wrap_help"] }
+csv = "^1.4.0"
+futures = "^0.3.34"
+leaky-bucket = "^1.1.2"
 libpostal-rust = { version = "0.1.1", path = "crates/libpostal-rust" }
-metrics = "^0.24.2"
-metrics-util = "^0.20.0"
+metrics = "^0.24.6"
+metrics-util = "^0.20.4"
 opinionated_metrics = { version = "0.2.0", path = "crates/opinionated_metrics" }
-rand = "^0.8.5"
-redis = { version = "^0.23.2", default-features = false, features = [
+reqwest = { version = "^0.13.4", default-features = false, features = ["json", "rustls"] }
+redis = { version = "^1.6.0", default-features = false, features = [
     "aio",
     "tokio-comp",
 ] }
 rustls = { version = "^0.23", default-features = false, features = ["aws-lc-rs"] }
-serde = { version = "^1.0.92", features = ["derive"] }
-# Last version of `serde_derive` that can be built from source. See
-# https://github.com/serde-rs/serde/issues/2538.
-serde_derive = "^1.0.184"
+serde = { version = "^1.0.229", features = ["derive"] }
 # IMPORTANT: We require `preserve_order` to correctly handle "structure" JSON
 # specifications in a way that puts the right data in the right output columns.
-serde_json = { version = "^1.0.39", features = ["preserve_order"] }
-sha2 = "^0.10.1"
-strum = "^0.25.0"
-strum_macros = "^0.25.2"
-tokio = { version = "^1.6.0", features = [
+serde_json = { version = "^1.0.151", features = ["preserve_order"] }
+sha2 = "^0.11.0"
+strum = { version = "^0.28.0", features = ["derive"] }
+tokio = { version = "^1.53.1", features = [
     "io-util",
     "macros",
     "rt-multi-thread",
     "sync",
 ] }
-tokio-stream = "^0.1.6"
-tracing = "^0.1.29"
-tracing-subscriber = { version = "^0.3.7", features = ["env-filter"] }
-url = "^2.1.1"
+tokio-stream = "^0.1.19"
+tracing = "^0.1.44"
+tracing-subscriber = { version = "^0.3.23", features = ["env-filter"] }
+url = "^2.5.8"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = { version = "^0.5.4", features = ["profiling"], optional = true }
+tikv-jemallocator = { version = "^0.7.0", features = ["profiling"], optional = true }
 
 # [profile.release]
 # debug = true

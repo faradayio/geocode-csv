@@ -56,6 +56,7 @@ jobs:
           tag_name: ${{ github.ref }}
           release_name: "${{ steps.extract_release_version.outputs.release_version }}"
           body_path: RELEASE_BODY.md
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
 
   # We use a matrix to run our build on every supported platform.
   build:

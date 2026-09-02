@@ -1,5 +1,7 @@
 //! Common interface to key/value stores used for caching.
 
+use std::time::Duration;
+
 use anyhow::format_err;
 use async_trait::async_trait;
 use url::Url;
@@ -8,6 +10,18 @@ use crate::Result;
 
 pub mod bigtable;
 mod redis;
+
+/// A value retrieved from a key/value store, with whatever freshness metadata
+/// the backend can provide.
+pub struct CachedValue {
+    /// The stored bytes.
+    pub bytes: Vec<u8>,
+
+    /// How long ago this entry was written, if the backend records write times.
+    /// `None` means the backend cannot tell us (e.g. Redis), in which case the
+    /// entry can never be considered stale for auto-refresh.
+    pub age: Option<Duration>,
+}
 
 /// A key/value store, like Redis or BigTable.
 ///
@@ -36,28 +50,14 @@ pub trait KeyValueStore: Send + Sync + 'static {
 
 impl dyn KeyValueStore {
     /// Create an appropriate `KeyValueStore` instance based on `url`.
-    #[allow(dead_code)]
     pub async fn new_from_url(
         url: Url,
         key_prefix: String,
     ) -> Result<Box<dyn KeyValueStore>> {
-        Self::new_from_url_with_bigtable_eviction(url, key_prefix, None).await
-    }
-
-    /// Create an appropriate `KeyValueStore` instance based on `url`, with optional BigTable eviction config.
-    pub async fn new_from_url_with_bigtable_eviction(
-        url: Url,
-        key_prefix: String,
-        bigtable_eviction_config: Option<bigtable::EvictionConfig>,
-    ) -> Result<Box<dyn KeyValueStore>> {
         match url.scheme() {
             "redis" => Ok(Box::new(redis::Redis::new(url, key_prefix).await?)),
             "bigtable" => {
-                let mut bigtable = bigtable::BigTable::new(url, key_prefix).await?;
-                if let Some(config) = bigtable_eviction_config {
-                    bigtable.set_eviction_config(config);
-                }
-                Ok(Box::new(bigtable))
+                Ok(Box::new(bigtable::BigTable::new(url, key_prefix).await?))
             }
             scheme => {
                 Err(format_err!("don't know how to connect to {}: URLs", scheme))
@@ -85,7 +85,7 @@ pub trait PipelinedGet<'store>: Send + Sync {
 
     /// Execute all our requests and return the results in order. We return
     /// `None` when a value can't be found.
-    async fn execute(&self) -> Result<Vec<Option<Vec<u8>>>>;
+    async fn execute(&self) -> Result<Vec<Option<CachedValue>>>;
 }
 
 /// A series of "set" requests that we'll send in a single batch.

@@ -1,6 +1,3 @@
-// Async HTTP boilerplate based on
-// https://github.com/daboross/futures-example-2019/
-
 #![recursion_limit = "128"]
 
 pub use anyhow::Result;
@@ -34,6 +31,7 @@ mod pipeline;
 mod server;
 mod unpack_vec;
 
+use crate::geocoders::cache::refresh::{RefreshPolicy, RefreshPolicyConfig};
 use crate::geocoders::{
     cache::Cache, invalid_record_skipper::InvalidRecordSkipper, libpostal::LibPostal,
     normalizer::Normalizer, shared_http_client, smarty::Smarty, Geocoder,
@@ -44,9 +42,9 @@ use crate::pipeline::{geocode_stdio, OnDuplicateColumns, CONCURRENCY, GEOCODE_SI
 use crate::server::run_server;
 use crate::{addresses::AddressColumnSpec, geocoders::paired::Paired};
 
-#[cfg(all(feature = "jemallocator", not(target_env = "msvc")))]
+#[cfg(all(feature = "tikv-jemallocator", not(target_env = "msvc")))]
 #[global_allocator]
-static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 /// Underlying geocoders we can use. (Helper struct for argument parsing.)
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -90,6 +88,15 @@ impl FromStr for MetricsLabel {
             Err(format_err!("expected \"key=value\", found {:?}", s))
         }
     }
+}
+
+/// Convert a whole-day count from a CLI flag into a `Duration`.
+fn duration_from_days(days: u64) -> Result<Duration> {
+    Ok(Duration::from_secs(
+        days.checked_mul(24 * 60 * 60).ok_or_else(|| {
+            format_err!("day count {days} is too large to convert to a duration")
+        })?,
+    ))
 }
 
 /// Our command-line arguments.
@@ -140,13 +147,34 @@ struct Opt {
     #[arg(long = "cache-key-prefix", requires = "cache_url")]
     cache_key_prefix: Option<String>,
 
-    /// BigTable cache eviction: minimum age in seconds before entries can be evicted.
-    #[arg(long = "bigtable-random-eviction-age")]
-    bigtable_random_eviction_age: Option<u64>,
+    /// Re-geocode a cached failure after this many days (then 2x, 4x, …).
+    /// Requires `--refresh-failures-max-attempts`, `--refresh-rate`, and
+    /// `--cache=bigtable://`.
+    #[arg(
+        long = "refresh-failures-after-days",
+        value_name = "N",
+        requires = "refresh_failures_max_attempts"
+    )]
+    refresh_failures_after_days: Option<u64>,
 
-    /// BigTable cache eviction: probability (0.0 to 1.0) of evicting eligible entries.
-    #[arg(long = "bigtable-random-eviction-rate")]
-    bigtable_random_eviction_rate: Option<f64>,
+    /// Stop re-checking a cached failure after this many refreshes. Requires
+    /// `--refresh-failures-after-days`.
+    #[arg(
+        long = "refresh-failures-max-attempts",
+        value_name = "N",
+        requires = "refresh_failures_after_days"
+    )]
+    refresh_failures_max_attempts: Option<u32>,
+
+    /// Re-geocode a cached success after this many days. Requires
+    /// `--refresh-rate` and `--cache=bigtable://`.
+    #[arg(long = "refresh-successes-after-days", value_name = "N")]
+    refresh_successes_after_days: Option<u64>,
+
+    /// Fraction of eligible cache keys to refresh on a given day, in (0, 1].
+    /// Required whenever any `--refresh-*` period is set.
+    #[arg(long = "refresh-rate", value_name = "F")]
+    refresh_rate: Option<f64>,
 
     /// Before processing addresses, normalize them using libpostal.
     #[arg(long = "normalize")]
@@ -252,41 +280,74 @@ async fn main() -> Result<()> {
         )
     });
 
-    // Choose our main geocoding client.
-    // Validate BigTable eviction arguments
-    let has_age = opt.bigtable_random_eviction_age.is_some();
-    let has_rate = opt.bigtable_random_eviction_rate.is_some();
-
-    if has_age || has_rate {
-        // Both age and rate must be specified together
-        if has_age != has_rate {
+    // Build our cache refresh policy, if requested. Refresh is only supported
+    // by the BigTable cache, which records a write time per entry.
+    let wants_refresh = opt.refresh_failures_after_days.is_some()
+        || opt.refresh_successes_after_days.is_some();
+    let refresh_policy = if wants_refresh {
+        let Some(rate) = opt.refresh_rate else {
             return Err(format_err!(
-                "--bigtable-random-eviction-age and --bigtable-random-eviction-rate must be used together"
+                "--refresh-rate is required whenever a --refresh-* period is set"
             ));
+        };
+        if !(rate > 0.0 && rate <= 1.0) {
+            return Err(format_err!("--refresh-rate must be in (0, 1], got {rate}"));
         }
-
-        if let Some(cache_url) = &opt.cache_url {
-            if cache_url.scheme() != "bigtable" {
+        if let Some(days) = opt.refresh_failures_after_days {
+            if days == 0 {
                 return Err(format_err!(
-                    "--bigtable-random-eviction-age and --bigtable-random-eviction-rate can only be used with --cache=bigtable://"
+                    "--refresh-failures-after-days must be greater than 0"
                 ));
             }
-        } else {
-            return Err(format_err!(
-                "--bigtable-random-eviction-age and --bigtable-random-eviction-rate require --cache=bigtable://"
-            ));
         }
-    }
-
-    if let Some(rate) = opt.bigtable_random_eviction_rate {
-        if !(0.0..=1.0).contains(&rate) {
-            return Err(format_err!(
-                "--bigtable-random-eviction-rate must be between 0.0 and 1.0, got {}",
-                rate
-            ));
+        if let Some(max_attempts) = opt.refresh_failures_max_attempts {
+            if max_attempts == 0 {
+                return Err(format_err!(
+                    "--refresh-failures-max-attempts must be greater than 0"
+                ));
+            }
         }
-    }
+        if let Some(days) = opt.refresh_successes_after_days {
+            if days == 0 {
+                return Err(format_err!(
+                    "--refresh-successes-after-days must be greater than 0"
+                ));
+            }
+        }
+        match &opt.cache_url {
+            Some(cache_url) if cache_url.scheme() == "bigtable" => {}
+            Some(_) => {
+                return Err(format_err!(
+                    "--refresh-* flags are only supported with --cache=bigtable://"
+                ))
+            }
+            None => {
+                return Err(format_err!(
+                    "--refresh-* flags require --cache=bigtable://"
+                ))
+            }
+        }
+        Some(RefreshPolicy::new(RefreshPolicyConfig {
+            failure_period: opt
+                .refresh_failures_after_days
+                .map(duration_from_days)
+                .transpose()?,
+            failure_max_attempts: opt.refresh_failures_max_attempts.unwrap_or(0),
+            success_period: opt
+                .refresh_successes_after_days
+                .map(duration_from_days)
+                .transpose()?,
+            rate,
+        }))
+    } else if opt.refresh_rate.is_some() {
+        return Err(format_err!(
+            "--refresh-rate requires --refresh-failures-after-days or --refresh-successes-after-days"
+        ));
+    } else {
+        None
+    };
 
+    // Choose our main geocoding client.
     let mut geocoder: Box<dyn Geocoder> = match opt.geocoder {
         GeocoderName::Smarty => Box::new(Smarty::new(
             opt.match_strategy,
@@ -304,37 +365,16 @@ async fn main() -> Result<()> {
             .as_deref()
             .unwrap_or_default()
             .to_owned();
-        // Prepare BigTable eviction config if specified
-        let bigtable_eviction_config = if cache_url.scheme() == "bigtable" {
-            if let (Some(age), Some(rate)) = (
-                opt.bigtable_random_eviction_age,
-                opt.bigtable_random_eviction_rate,
-            ) {
-                use crate::key_value_stores::bigtable::EvictionConfig;
-                Some(EvictionConfig {
-                    min_age_seconds: age,
-                    eviction_rate: rate,
-                })
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
         let key_value_store =
-            <dyn KeyValueStore>::new_from_url_with_bigtable_eviction(
-                cache_url.to_owned(),
-                cache_key_prefix,
-                bigtable_eviction_config,
-            )
-            .await?;
+            <dyn KeyValueStore>::new_from_url(cache_url.to_owned(), cache_key_prefix)
+                .await?;
         geocoder = Box::new(
             Cache::new(
                 key_value_store,
                 geocoder,
                 opt.cache_output_keys,
                 opt.cache_hits_only,
+                refresh_policy,
             )
             .await?,
         );

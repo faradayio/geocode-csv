@@ -11,9 +11,7 @@
 #![allow(clippy::ptr_offset_with_cast)]
 #![allow(clippy::useless_transmute)]
 
-use std::sync::{Arc, Mutex};
-
-use lazy_static::lazy_static;
+use std::sync::{Arc, LazyLock, Mutex};
 
 /// Which portions of this library have been initialized?
 ///
@@ -31,17 +29,18 @@ pub struct InitializationState {
     pub language_classifier_initialized: bool,
 }
 
-lazy_static! {
-    /// You _must_ take this lock before doing _anything_ with this library.
-    /// `libpostal` is [not thread safe][threads].
-    ///
-    /// [threads]: https://github.com/openvenues/libpostal/issues/34
-    pub static ref GLOBAL_LOCK: Arc<Mutex<InitializationState>> = Arc::new(Mutex::new(InitializationState {
-        initialized: false,
-        parser_initialized: false,
-        language_classifier_initialized: false,
-    }));
-}
+/// You _must_ take this lock before doing _anything_ with this library.
+/// `libpostal` is [not thread safe][threads].
+///
+/// [threads]: https://github.com/openvenues/libpostal/issues/34
+pub static GLOBAL_LOCK: LazyLock<Arc<Mutex<InitializationState>>> =
+    LazyLock::new(|| {
+        Arc::new(Mutex::new(InitializationState {
+            initialized: false,
+            parser_initialized: false,
+            language_classifier_initialized: false,
+        }))
+    });
 
 // Use build.rs to automatically generate these bindings
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));

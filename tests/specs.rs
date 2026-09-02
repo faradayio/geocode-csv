@@ -34,8 +34,9 @@ fn all_fields() {
         .arg("--license=us-core-enterprise-cloud")
         .arg("--spec=spec.json")
         .arg(format!("--cache={}", bigtable_cache_url))
-        .arg("--bigtable-random-eviction-age=1")
-        .arg("--bigtable-random-eviction-rate=1.0")
+        .arg("--refresh-failures-after-days=90")
+        .arg("--refresh-failures-max-attempts=4")
+        .arg("--refresh-rate=1")
         .output_with_stdin(SIMPLE_CSV)
         .expect_success();
     assert!(output.stdout_str().contains("gc_addressee"));

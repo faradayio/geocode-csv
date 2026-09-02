@@ -12,13 +12,12 @@ repository = "https://github.com/faradayio/geocode-csv"
 documentation = "https://docs.rs/metrics-exporter-newrelic"
 
 [dependencies]
-http = "0.2.6"
-metrics = "0.24.2"
-metrics-util = "0.20.0"
-reqwest = { version = "0.11.9", default-features = false, features = ["json", "rustls-tls"] }
-serde = "1.0.136"
-serde_derive = "1.0.136"
-serde_json = "1.0.78"
-thiserror = "1.0.30"
-tokio = { version = "1.16.1", default-features = false, features = ["sync"] }
-tracing = "0.1.29"
+http = "1.5.0"
+metrics = "0.24.6"
+metrics-util = "0.20.4"
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "rustls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.20"
+tokio = { version = "1.53.1", default-features = false, features = ["sync"] }
+tracing = "0.1.44"

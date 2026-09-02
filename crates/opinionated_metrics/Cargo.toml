@@ -12,9 +12,9 @@ repository = "https://github.com/faradayio/geocode-csv"
 documentation = "https://docs.rs/opinionated_metrics"
 
 [dependencies]
-metrics = "0.24.2"
+metrics = "0.24.6"
 metrics-exporter-newrelic = { version = "0.2.0", path = "../metrics-exporter-newrelic" }
 # We'll add back Prometheus features like http-listener as we support them.
-metrics-exporter-prometheus = { version = "0.17.2", default-features = false }
-thiserror = "1.0.30"
-tracing = "0.1.29"
+metrics-exporter-prometheus = { version = "0.18.3", default-features = false }
+thiserror = "2.0.20"
+tracing = "0.1.44"

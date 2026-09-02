@@ -2,26 +2,30 @@
 //! enough to handle a cluster of geocode-csv clients running at full speed).
 
 use std::fmt::{self, Write};
+use std::time::SystemTime;
 
-use anyhow::{format_err, Context};
+use anyhow::format_err;
 use async_trait::async_trait;
 use metrics::{counter, describe_counter};
 
-use crate::{addresses::Address, key_value_stores::KeyValueStore, Result};
+use crate::{
+    addresses::Address,
+    key_value_stores::{CachedValue, KeyValueStore},
+    Result,
+};
 
-use self::compression::CacheCompressor;
+use self::entry::CacheEntry;
+use self::refresh::RefreshPolicy;
 
 use super::{Geocoded, Geocoder};
 
-mod compression;
+mod entry;
+pub mod refresh;
 
 /// A Redis-based caching layer.
 ///
 /// This wraps another geocoder, and caches calls in Redis.
 pub struct Cache {
-    /// Compressor we use to compress cached data.
-    compressor: CacheCompressor,
-
     /// Our key/value store.
     key_value_store: Box<dyn KeyValueStore>,
 
@@ -37,8 +41,18 @@ pub struct Cache {
     /// Should we geocode cache misses?
     cache_hits_only: bool,
 
+    /// Optional policy for automatically refreshing stale cache entries.
+    refresh_policy: Option<RefreshPolicy>,
+
     /// The column names we output.
     column_names: Vec<String>,
+}
+
+/// An address we need to send to the inner geocoder.
+struct CacheMiss {
+    offset: usize,
+    address: Address,
+    prior_entry: Option<CacheEntry>,
 }
 
 impl Cache {
@@ -49,12 +63,22 @@ impl Cache {
         inner: Box<dyn Geocoder>,
         output_keys: bool,
         cache_hits_only: bool,
+        refresh_policy: Option<RefreshPolicy>,
     ) -> Result<Cache> {
         describe_counter!("geocodecsv.cache_hits.total", "Addresses found in cache");
         describe_counter!(
             "geocodecsv.cache_misses.total",
             "Addresses not found in cache"
         );
+        describe_counter!(
+            "geocodecsv.cache.refreshed.total",
+            "Cache entries refreshed (treated as a miss) by the refresh policy"
+        );
+        describe_counter!(
+            "geocodecsv.cache.refresh_results.total",
+            "Outcomes of a refresh, labeled by the prior and new outcome"
+        );
+        CacheEntry::describe_metrics();
 
         let inner_cache_prefix = inner.cache_prefix();
         let mut column_names = inner.column_names().to_owned();
@@ -63,13 +87,13 @@ impl Cache {
         }
 
         Ok(Cache {
-            compressor: CacheCompressor::new(),
             key_value_store,
             inner,
             inner_cache_prefix,
             output_keys,
             column_names,
             cache_hits_only,
+            refresh_policy,
         })
     }
 }
@@ -116,72 +140,66 @@ impl Geocoder for Cache {
         for key in &keys {
             pipelined_get.add_get(key.to_owned());
         }
-        let cache_results: Vec<Option<Vec<u8>>> = pipelined_get.execute().await?;
-
-        // Our standard bincode configuration.
-        let bincode_config = bincode::config::standard()
-            .with_little_endian()
-            .with_variable_int_encoding();
+        let cache_results: Vec<Option<CachedValue>> = pipelined_get.execute().await?;
 
         // Unpack our results, recording any cache hits, and building a list of
         // the misses to forward to our inner geocoder.
         let mut cache_misses = Vec::with_capacity(addresses.len());
-        let mut cache_miss_offsets = Vec::with_capacity(addresses.len());
-        let mut decompressed = Vec::with_capacity(256);
+        // Compute the current time once for the whole batch, so every entry's
+        // refresh decision is made against a single consistent `now`.
+        let now = SystemTime::now();
         for (i, cached_value) in cache_results.iter().enumerate() {
-            if let Some(cache_hit) = cached_value {
-                // We found this result in the cache.
-                decompressed.clear();
-                if cache_hit[0] != self.compressor.id() {
+            let Some(cached_value) = cached_value else {
+                cache_misses.push(CacheMiss {
+                    offset: i,
+                    address: addresses[i].clone(),
+                    prior_entry: None,
+                });
+                continue;
+            };
+
+            let entry = CacheEntry::decode(&cached_value.bytes)?;
+
+            if let (Some(refresh_policy), Some(age), false) =
+                (&self.refresh_policy, cached_value.age, self.cache_hits_only)
+            {
+                if refresh_policy.should_refresh(&keys[i], &entry, age, now) {
+                    counter!("geocodecsv.cache.refreshed.total", "outcome" => entry.outcome().as_metric_label())
+                        .increment(1);
+                    cache_misses.push(CacheMiss {
+                        offset: i,
+                        address: addresses[i].clone(),
+                        prior_entry: Some(entry),
+                    });
+                    continue;
+                }
+            }
+
+            if let Some(column_values) = entry.geocoded {
+                if column_values.len() != self.inner.column_names().len() {
                     return Err(format_err!(
-                        "unknown compression format {:?}",
-                        cache_hit[0]
+                        "cannot return {:?} for columns {:?} because it has the wrong number of values",
+                        column_values,
+                        self.column_names(),
                     ));
                 }
-                self.compressor
-                    .decompress(&cache_hit[1..], &mut decompressed)?;
-                let (cache_hit, _) = bincode::serde::decode_from_slice::<
-                    Option<Vec<String>>,
-                    _,
-                >(&decompressed, bincode_config)
-                .context("could not deserialize cached data")?;
-
-                // Here, a `None` value represents a cached geocoding _failure_.
-                // If a previous attempt failed, we expect that more recent ones
-                // may fail, too.
-                //
-                // TODO: Explain this better.
-                if let Some(cache_hit) = cache_hit {
-                    if cache_hit.len() != self.inner.column_names().len() {
-                        return Err(format_err!(
-                            "cannot return {:?} for columns {:?} because it has the wrong number of values",
-                            cache_hit,
-                            self.column_names(),
-                        ));
-                    }
-                    let candidate = Geocoded {
-                        column_values: cache_hit,
-                    };
-                    if candidate.contains_null_bytes() {
-                        // This result contains old buggy data. Treat as a cache
-                        // miss.
-                        cache_misses.push(addresses[i].clone());
-                        cache_miss_offsets.push(i);
-                        counter!("geocodecsv.cache_hits.total", "geocoding_result" => "invalid_data")
-                            .increment(1);
-                    } else {
-                        geocoded[i] = Some(candidate);
-                        counter!("geocodecsv.cache_hits.total", "geocoding_result" => "found")
-                            .increment(1);
-                    }
+                let candidate = Geocoded { column_values };
+                if candidate.contains_null_bytes() {
+                    cache_misses.push(CacheMiss {
+                        offset: i,
+                        address: addresses[i].clone(),
+                        prior_entry: None,
+                    });
+                    counter!("geocodecsv.cache_hits.total", "geocoding_result" => "invalid_data")
+                        .increment(1);
                 } else {
-                    counter!("geocodecsv.cache_hits.total", "geocoding_result" => "unknown_address")
+                    geocoded[i] = Some(candidate);
+                    counter!("geocodecsv.cache_hits.total", "geocoding_result" => "found")
                         .increment(1);
                 }
             } else {
-                // We need to forward this result.
-                cache_misses.push(addresses[i].clone());
-                cache_miss_offsets.push(i);
+                counter!("geocodecsv.cache_hits.total", "geocoding_result" => "unknown_address")
+                    .increment(1);
             }
         }
         counter!("geocodecsv.cache_misses.total").increment(cache_misses.len() as u64);
@@ -191,34 +209,42 @@ impl Geocoder for Cache {
         // Alternatively, if the caller specified --cache-hits-only,
         // we should avoid geocoding any remaining addresses.
         if !cache_misses.is_empty() && !self.cache_hits_only {
-            // Pass remainder through to our inner geocoder.
+            let cache_miss_addresses = cache_misses
+                .iter()
+                .map(|cache_miss| cache_miss.address.clone())
+                .collect::<Vec<_>>();
             let cache_miss_retries =
-                self.inner.geocode_addresses(&cache_misses).await?;
+                self.inner.geocode_addresses(&cache_miss_addresses).await?;
 
-            // Record our successes (and build a Redis command to store them).
             let mut pipelined_set = self.key_value_store.new_pipelined_set();
             let mut encoded = Vec::with_capacity(256);
-            for (i, retry) in cache_miss_offsets
-                .into_iter()
-                .zip(cache_miss_retries.into_iter())
+            for (cache_miss, retry) in cache_misses.into_iter().zip(cache_miss_retries)
             {
-                // Encode our value for caching.
-                let value = retry.as_ref().map(|retry| &retry.column_values);
+                if let Some(prior_entry) = &cache_miss.prior_entry {
+                    counter!(
+                        "geocodecsv.cache.refresh_results.total",
+                        "from" => prior_entry.outcome().as_metric_label(),
+                        "to" => if retry.is_some() { "success" } else { "failure" }
+                    )
+                    .increment(1);
+                }
+
+                let entry = CacheEntry::for_write_back(
+                    retry.as_ref().map(|retry| retry.column_values.clone()),
+                    cache_miss.prior_entry.as_ref(),
+                );
                 encoded.clear();
-                bincode::encode_into_std_write(value, &mut encoded, bincode_config)
-                    .context("could not encode value for caching")?;
+                entry.encode(&mut encoded)?;
+                pipelined_set.add_set(
+                    keys[cache_miss.offset].clone(),
+                    std::mem::take(&mut encoded),
+                );
 
-                // Compress our encoded value and add it to our pipeline set.
-                let mut compressed = Vec::with_capacity(256);
-                compressed.push(self.compressor.id());
-                self.compressor.compress(&encoded, &mut compressed)?;
-                pipelined_set.add_set(keys[i].clone(), compressed);
-
-                // Add out geocoding result to our output.
-                geocoded[i] = retry;
+                geocoded[cache_miss.offset] = entry
+                    .geocoded
+                    .map(|column_values| Geocoded { column_values });
             }
 
-            // Write our new results back to our cache.
             pipelined_set.execute().await?;
         }
 

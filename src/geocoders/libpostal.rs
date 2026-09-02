@@ -10,36 +10,32 @@ use crate::{addresses::Address, Result};
 use super::{Geocoded, Geocoder};
 
 pub(crate) static COLUMN_NAMES: &[&str] = &[
-    // From
-    // https://github.com/OpenCageData/address-formatting/blob/master/conf/components.yaml.
-    "archipelago",
+    // These are the address-component labels that libpostal's address parser can
+    // actually emit, as defined in
+    // `crates/libpostal-sys/libpostal/src/address_parser.h`. Earlier versions of
+    // this list were copied from OpenCage's address-_formatting_ vocabulary
+    // (components.yaml), which is a different vocabulary: it includes names like
+    // `county`, `neighbourhood`, and `hamlet` that libpostal's parser never
+    // produces (it aliases those to `state_district`, `suburb`, and `city`
+    // respectively before training). We omit the non-address parser labels
+    // `category`, `near`, `website`, and `phone`.
+    "building",
     "city",
-    "continent",
-    "country_code",
-    "country",
-    "county",
-    "hamlet",
-    "house_number",
-    "house",
-    "island",
-    "municipality",
-    "neighbourhood",
-    "postal_city",
-    "postcode",
-    "region",
-    "road",
-    "state_district",
-    "state",
-    "village",
-    // Additional fields from https://github.com/openvenues/libpostal.
-    "category",
     "city_district",
+    "country",
     "country_region",
     "entrance",
+    "house",
+    "house_number",
+    "island",
     "level",
-    "near",
+    "metro_station",
     "po_box",
+    "postcode",
+    "road",
     "staircase",
+    "state",
+    "state_district",
     "suburb",
     "unit",
     "world_region",

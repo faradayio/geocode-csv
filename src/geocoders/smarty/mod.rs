@@ -13,7 +13,7 @@ use self::{
     structure::Structure,
 };
 
-use super::{Geocoded, Geocoder, MatchStrategy, SharedHttpClient};
+use super::{Geocoded, Geocoder, MatchStrategy};
 
 pub mod client;
 mod structure;
@@ -47,7 +47,7 @@ impl Smarty {
         match_strategy: MatchStrategy,
         license: String,
         rate_limiter: Option<Arc<RateLimiter>>,
-        http_client: SharedHttpClient,
+        http_client: reqwest::Client,
     ) -> Result<Smarty> {
         describe_counter!("geocodecsv.addresses_geocoded.total", "Addresses geocoded");
 

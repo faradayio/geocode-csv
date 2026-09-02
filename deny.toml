@@ -4,7 +4,11 @@
 
 [advisories]
 version = 2
-ignore = []
+ignore = [
+    # 3.0.0 is a tombstone that only emits compile_error!. 2.0.1 is the last
+    # real release, and our cache payload format is encoded with it.
+    { id = "RUSTSEC-2025-0141", reason = "bincode 3.0.0 is not a real upgrade; cache format depends on 2.0.1" },
+]
 
 [licenses]
 version = 2
@@ -14,7 +18,9 @@ allow = [
     "Apache-2.0",
     "BSD-2-Clause",
     "BSD-3-Clause",
+    "BSL-1.0",
     "CC0-1.0",
+    "CDLA-Permissive-2.0",
     "ISC",
     "MPL-2.0",
     "OpenSSL",

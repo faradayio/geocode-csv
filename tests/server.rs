@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use cli_test_dir::*;
-use hyper::header::CONTENT_TYPE;
 use reqwest::blocking::{Client, Response};
+use reqwest::header::CONTENT_TYPE;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -109,8 +109,10 @@ fn server_helper() -> Result<Response> {
             .context("HTTP request failed")
     };
 
-    // Post a request with JSON content.
-    let deadline = Instant::now() + Duration::from_secs(5);
+    // Post a request with JSON content. In server mode we prime libpostal
+    // before binding the listener, which can take 5-10 seconds, so we give the
+    // server plenty of time to start accepting connections.
+    let deadline = Instant::now() + Duration::from_secs(30);
     loop {
         match connect() {
             Ok(res) => break Ok(res),
