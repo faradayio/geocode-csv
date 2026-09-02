@@ -1,7 +1,7 @@
 [package]
 name = "opinionated_metrics"
-version = "0.2.0"
-authors = ["Eric Kidd <git@randomhacks.net>"]
+version = "0.2.1"
+authors = ["Eric Kidd <git@randomhacks.net>", "Seamus Abshere <seamus@abshere.net>"]
 edition = "2021"
 
 description = "Automatic configuration of exporters for `metrics`"
@@ -12,9 +12,9 @@ repository = "https://github.com/faradayio/geocode-csv"
 documentation = "https://docs.rs/opinionated_metrics"
 
 [dependencies]
-metrics = "0.20.1"
+metrics = "0.24.6"
 metrics-exporter-newrelic = { version = "0.2.0", path = "../metrics-exporter-newrelic" }
 # We'll add back Prometheus features like http-listener as we support them.
-metrics-exporter-prometheus = { version = "0.11.0", default-features = false }
-thiserror = "1.0.30"
-tracing = "0.1.29"
+metrics-exporter-prometheus = { version = "0.18.3", default-features = false }
+thiserror = "2.0.20"
+tracing = "0.1.44"

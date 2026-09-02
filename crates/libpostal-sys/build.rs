@@ -5,11 +5,12 @@
 //! as an Ubuntu PPE.
 
 use std::env;
+use std::path::PathBuf;
 
 /// The main entry point to our build script.
 fn main() {
     build_libpostal();
-    //bindgen_libpostal();
+    bindgen_libpostal();
 }
 
 /// Use `autotools` to compile `libpostal` as a static library.
@@ -76,36 +77,34 @@ fn build_libpostal() {
     println!("cargo:rustc-link-lib=static=postal");
 }
 
-// We're doing this manually for now. See lib.rs.
-//
-// /// Use `bindgen` to generate a Rust version of `libpostal.h`. Note that this is
-// /// very low-level, and it will require `unsafe` and the Rust C FFI to use. But
-// /// at least we won't need to _declare_ the C header details.
-// ///
-// /// This is copied from https://rust-lang.github.io/rust-bindgen/tutorial-3.html
-// /// and adapted only slightly.
-// fn bindgen_libpostal() {
-//     // Tell cargo to invalidate the built crate whenever the wrapper changes
-//     println!("cargo:rerun-if-changed=wrapper.h");
+/// Use `bindgen` to generate a Rust version of `libpostal.h`. Note that this is
+/// very low-level, and it will require `unsafe` and the Rust C FFI to use. But
+/// at least we won't need to _declare_ the C header details.
+///
+/// This is copied from https://rust-lang.github.io/rust-bindgen/tutorial-3.html
+/// and adapted only slightly.
+fn bindgen_libpostal() {
+    // Tell cargo to invalidate the built crate whenever the wrapper changes
+    println!("cargo:rerun-if-changed=wrapper.h");
 
-//     // The bindgen::Builder is the main entry point
-//     // to bindgen, and lets you build up options for
-//     // the resulting bindings.
-//     let bindings = bindgen::Builder::default()
-//         // The input header we would like to generate
-//         // bindings for.
-//         .header("wrapper.h")
-//         // Tell cargo to invalidate the built crate whenever any of the
-//         // included header files changed.
-//         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-//         // Finish the builder and generate the bindings.
-//         .generate()
-//         // Unwrap the Result and panic on failure.
-//         .expect("Unable to generate bindings");
+    // The bindgen::Builder is the main entry point
+    // to bindgen, and lets you build up options for
+    // the resulting bindings.
+    let bindings = bindgen::Builder::default()
+        // The input header we would like to generate
+        // bindings for.
+        .header("wrapper.h")
+        // Tell cargo to invalidate the built crate whenever any of the
+        // included header files changed.
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        // Finish the builder and generate the bindings.
+        .generate()
+        // Unwrap the Result and panic on failure.
+        .expect("Unable to generate bindings");
 
-//     // Write the bindings to the $OUT_DIR/bindings.rs file.
-//     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-//     bindings
-//         .write_to_file(out_path.join("bindings.rs"))
-//         .expect("Couldn't write bindings!");
-// }
+    // Write the bindings to the $OUT_DIR/bindings.rs file.
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    bindings
+        .write_to_file(out_path.join("bindings.rs"))
+        .expect("Couldn't write bindings!");
+}

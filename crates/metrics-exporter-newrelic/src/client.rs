@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use serde_derive::Serialize;
+use serde::Serialize;
 use serde_json::{json, Value};
 use tracing::{instrument, trace};
 

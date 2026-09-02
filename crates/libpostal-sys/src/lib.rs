@@ -6,10 +6,12 @@
 // Ignore test-only warnings caused by
 // https://github.com/rust-lang/rust-bindgen/issues/1651.
 #![cfg_attr(test, allow(deref_nullptr))]
+// Allow clippy warnings in generated bindgen code
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::ptr_offset_with_cast)]
+#![allow(clippy::useless_transmute)]
 
-use std::sync::{Arc, Mutex};
-
-use lazy_static::lazy_static;
+use std::sync::{Arc, LazyLock, Mutex};
 
 /// Which portions of this library have been initialized?
 ///
@@ -27,27 +29,21 @@ pub struct InitializationState {
     pub language_classifier_initialized: bool,
 }
 
-lazy_static! {
-    /// You _must_ take this lock before doing _anything_ with this library.
-    /// `libpostal` is [not thread safe][threads].
-    ///
-    /// [threads]: https://github.com/openvenues/libpostal/issues/34
-    pub static ref GLOBAL_LOCK: Arc<Mutex<InitializationState>> = Arc::new(Mutex::new(InitializationState {
-        initialized: false,
-        parser_initialized: false,
-        language_classifier_initialized: false,
-    }));
-}
+/// You _must_ take this lock before doing _anything_ with this library.
+/// `libpostal` is [not thread safe][threads].
+///
+/// [threads]: https://github.com/openvenues/libpostal/issues/34
+pub static GLOBAL_LOCK: LazyLock<Arc<Mutex<InitializationState>>> =
+    LazyLock::new(|| {
+        Arc::new(Mutex::new(InitializationState {
+            initialized: false,
+            parser_initialized: false,
+            language_classifier_initialized: false,
+        }))
+    });
 
-// We could use build.rs to automatically generate these bindings, then include
-//them like this. include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-
-// Assume our bindings were generated using:
-//
-//     bindgen wrapper.h -o src/bindings.rs
-//
-// See the README.md file.
-include!("bindings.rs");
+// Use build.rs to automatically generate these bindings
+include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 #[cfg(test)]
 mod tests {
@@ -97,7 +93,7 @@ mod tests {
                 CString::new("Quatre-vingt-douze Ave des Champs-Élysées")
                     .expect("CString::new failed");
             let normalization_options = libpostal_get_default_options();
-            let mut num_expansions: size_t = 0;
+            let mut num_expansions: usize = 0;
             let expansions = libpostal_expand_address(
                 street_address.as_ptr() as *mut _,
                 normalization_options,

@@ -1,13 +1,27 @@
 //! Common interface to key/value stores used for caching.
 
+use std::time::Duration;
+
 use anyhow::format_err;
 use async_trait::async_trait;
 use url::Url;
 
 use crate::Result;
 
-mod bigtable;
+pub mod bigtable;
 mod redis;
+
+/// A value retrieved from a key/value store, with whatever freshness metadata
+/// the backend can provide.
+pub struct CachedValue {
+    /// The stored bytes.
+    pub bytes: Vec<u8>,
+
+    /// How long ago this entry was written, if the backend records write times.
+    /// `None` means the backend cannot tell us (e.g. Redis), in which case the
+    /// entry can never be considered stale for auto-refresh.
+    pub age: Option<Duration>,
+}
 
 /// A key/value store, like Redis or BigTable.
 ///
@@ -71,7 +85,7 @@ pub trait PipelinedGet<'store>: Send + Sync {
 
     /// Execute all our requests and return the results in order. We return
     /// `None` when a value can't be found.
-    async fn execute(&self) -> Result<Vec<Option<Vec<u8>>>>;
+    async fn execute(&self) -> Result<Vec<Option<CachedValue>>>;
 }
 
 /// A series of "set" requests that we'll send in a single batch.

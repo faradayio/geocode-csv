@@ -10,9 +10,7 @@ use crate::geocoders::Geocoder;
 use anyhow::{format_err, Context, Result};
 use axum::{
     extract::DefaultBodyLimit,
-    headers::{HeaderMap, HeaderName},
-    http::header::CONTENT_TYPE,
-    http::StatusCode,
+    http::{header::CONTENT_TYPE, HeaderMap, HeaderName, StatusCode},
     routing::post,
     Extension, Json, Router,
 };
@@ -52,13 +50,14 @@ pub async fn run_server(listen_addr: &str, geocoder: Box<dyn Geocoder>) -> Resul
         // rough size of `[crate::pipeline::GEOCODE_SIZE]`.
         .layer(DefaultBodyLimit::max(16384));
 
-    let listen_addr = listen_addr.parse().with_context(|| {
-        format!("could not parse listen address: {:?}", listen_addr)
-    })?;
+    let listener = tokio::net::TcpListener::bind(listen_addr)
+        .await
+        .with_context(|| {
+            format!("could not bind to listen address: {:?}", listen_addr)
+        })?;
 
     // Run it with axum on the given listen address.
-    axum::Server::bind(&listen_addr)
-        .serve(app.into_make_service())
+    axum::serve(listener, app)
         .await
         .context("web server failed to start")
 }

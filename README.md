@@ -52,6 +52,32 @@ You can geocode multiple addresses per row as follows:
 
 This will insert two sets of columns, one beginning with `geocoded_shipping_` and the other with `geocoded_billing_`.
 
+## Caching
+
+Pass `--cache=redis://...` or `--cache=bigtable://PROJECT/INSTANCE/TABLE` to store every geocoding result, including "no match" results, in a key/value store. Later runs read from the cache first and only call Smarty for addresses they have not seen.
+
+### Refreshing stale cache entries
+
+Smarty's coverage improves over time, so an address that failed to match last year may match today. With a BigTable cache, you can ask `geocode-csv` to re-geocode cached results as it reads them:
+
+```sh
+geocode-csv --spec address_spec.json \
+  --cache=bigtable://PROJECT/INSTANCE/TABLE \
+  --refresh-failures-after-days=90 \
+  --refresh-failures-max-attempts=4 \
+  --refresh-rate=0.1 \
+  < in.csv > out.csv
+```
+
+- `--refresh-failures-after-days=N` re-checks a cached "no match" once it is `N` days old. Each failed re-check doubles the wait (`N`, `2N`, `4N`, ...).
+- `--refresh-failures-max-attempts=M` stops re-checking a failure after `M` refreshes.
+- `--refresh-successes-after-days=N` (optional) re-checks a successful geocode once it is `N` days old. If Smarty then returns no match, the old result is kept.
+- `--refresh-rate=F`, with `F` in `(0, 1]`, is required whenever a refresh period is set. Of the cache entries this run reads that are due for refresh, only fraction `F` are actually re-geocoded on any given day. The decision is derived from the cache key and the date, so the same entry gets the same answer all day. Use this to stop a cache that was loaded all at once from coming due all at once.
+
+Refresh only works with BigTable, because Redis does not record when a key was written. `--cache-hits-only` disables refresh.
+
+Rows written by this version can still be read by older versions of `geocode-csv`.
+
 ## Build
 
 You'll need to run:

@@ -27,10 +27,16 @@ fn all_fields() {
     }
 }"#,
     );
+    let bigtable_cache_url = std::env::var("BIGTABLE_CACHE_URL")
+        .expect("BIGTABLE_CACHE_URL environment variable must be set");
     let output = testdir
         .cmd()
         .arg("--license=us-core-enterprise-cloud")
         .arg("--spec=spec.json")
+        .arg(format!("--cache={}", bigtable_cache_url))
+        .arg("--refresh-failures-after-days=90")
+        .arg("--refresh-failures-max-attempts=4")
+        .arg("--refresh-rate=1")
         .output_with_stdin(SIMPLE_CSV)
         .expect_success();
     assert!(output.stdout_str().contains("gc_addressee"));
@@ -288,4 +294,124 @@ fn append_libpostal() {
     assert!(output.stdout_str().contains("Residential"));
     assert!(output.stdout_str().contains("40.21"));
     assert!(output.stdout_str().contains("gc_libpostal_city"));
+}
+
+#[test]
+#[ignore]
+fn redis_cache_hit_test() {
+    let testdir = TestDir::new("geocode-csv", "redis_cache_hit_test");
+
+    testdir.create_file(
+        "spec.json",
+        r#"{
+    "gc": {
+        "house_number_and_street": [
+            "address_1",
+            "address_2"
+        ],
+        "city": "city",
+        "state": "state",
+        "postcode": "zip_code"
+    }
+}"#,
+    );
+
+    // First run - should call Smarty API and cache the result
+    let output1 = testdir
+        .cmd()
+        .arg("--license=us-core-enterprise-cloud")
+        .arg("--spec=spec.json")
+        .arg("--cache=redis://localhost:6379")
+        .output_with_stdin(SIMPLE_CSV)
+        .expect_success();
+
+    // Verify first run has correct data
+    assert!(output1.stdout_str().contains("gc_addressee"));
+    assert!(output1.stdout_str().contains("Commercial"));
+
+    // Second run - should use cache, not call Smarty API
+    let output2 = testdir
+        .cmd()
+        .arg("--license=us-core-enterprise-cloud")
+        .arg("--spec=spec.json")
+        .arg("--cache=redis://localhost:6379")
+        .output_with_stdin(SIMPLE_CSV)
+        .expect_success();
+
+    // Verify second run has identical data (from cache)
+    assert_eq!(output1.stdout_str(), output2.stdout_str());
+
+    // Test cache-hits-only mode - should work without calling Smarty
+    let output3 = testdir
+        .cmd()
+        .arg("--license=us-core-enterprise-cloud")
+        .arg("--spec=spec.json")
+        .arg("--cache=redis://localhost:6379")
+        .arg("--cache-hits-only")
+        .output_with_stdin(SIMPLE_CSV)
+        .expect_success();
+
+    // Should get the same cached data
+    assert_eq!(output1.stdout_str(), output3.stdout_str());
+}
+
+#[test]
+#[ignore]
+fn bigtable_cache_hit_test() {
+    let testdir = TestDir::new("geocode-csv", "bigtable_cache_hit_test");
+
+    testdir.create_file(
+        "spec.json",
+        r#"{
+    "gc": {
+        "house_number_and_street": [
+            "address_1",
+            "address_2"
+        ],
+        "city": "city",
+        "state": "state",
+        "postcode": "zip_code"
+    }
+}"#,
+    );
+
+    // First run - should call Smarty API and cache the result
+    let bigtable_cache_url = std::env::var("BIGTABLE_CACHE_URL")
+        .expect("BIGTABLE_CACHE_URL environment variable must be set");
+    let output1 = testdir
+        .cmd()
+        .arg("--license=us-core-enterprise-cloud")
+        .arg("--spec=spec.json")
+        .arg(format!("--cache={}", bigtable_cache_url))
+        .output_with_stdin(SIMPLE_CSV)
+        .expect_success();
+
+    // Verify first run has correct data
+    assert!(output1.stdout_str().contains("gc_addressee"));
+    assert!(output1.stdout_str().contains("Commercial"));
+
+    // Second run - should use cache, not call Smarty API
+    let output2 = testdir
+        .cmd()
+        .arg("--license=us-core-enterprise-cloud")
+        .arg("--spec=spec.json")
+        .arg(format!("--cache={}", bigtable_cache_url))
+        .output_with_stdin(SIMPLE_CSV)
+        .expect_success();
+
+    // Verify second run has identical data (from cache)
+    assert_eq!(output1.stdout_str(), output2.stdout_str());
+
+    // Test cache-hits-only mode - should work without calling Smarty
+    let output3 = testdir
+        .cmd()
+        .arg("--license=us-core-enterprise-cloud")
+        .arg("--spec=spec.json")
+        .arg(format!("--cache={}", bigtable_cache_url))
+        .arg("--cache-hits-only")
+        .output_with_stdin(SIMPLE_CSV)
+        .expect_success();
+
+    // Should get the same cached data
+    assert_eq!(output1.stdout_str(), output3.stdout_str());
 }

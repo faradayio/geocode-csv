@@ -1,12 +1,10 @@
 //! Geocoding backends.
 
-use std::{fmt, iter::repeat, str::FromStr, sync::Arc};
+use std::{fmt, str::FromStr};
 
 use anyhow::format_err;
 use async_trait::async_trait;
 use csv::StringRecord;
-use hyper::{client::HttpConnector, Client};
-use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -22,21 +20,11 @@ pub mod normalizer;
 pub mod paired;
 pub mod smarty;
 
-/// A `hyper` client shared between multiple workers.
-pub type SharedHttpClient = Arc<Client<HttpsConnector<HttpConnector>>>;
-
-pub fn shared_http_client(concurrency: usize) -> SharedHttpClient {
-    // Create a shared `hyper::Client` with a connection pool, so that we can
-    // use keep-alive.
-    Arc::new(
-        Client::builder().pool_max_idle_per_host(concurrency).build(
-            HttpsConnectorBuilder::new()
-                .with_native_roots()
-                .https_only()
-                .enable_http2()
-                .build(),
-        ),
-    )
+pub fn shared_http_client(concurrency: usize) -> reqwest::Client {
+    reqwest::Client::builder()
+        .pool_max_idle_per_host(concurrency)
+        .build()
+        .expect("failed to build HTTP client")
 }
 
 /// What match candidates should we output when geocoding?
@@ -177,6 +165,6 @@ pub trait Geocoder: Send + Sync + 'static {
     /// Copy empty values into `geocoded`, one for each column that this
     /// geocoder would produce.
     fn add_empty_columns_to_row(&self, out_row: &mut StringRecord) {
-        out_row.extend(repeat("").take(self.column_names().len()));
+        out_row.extend(std::iter::repeat_n("", self.column_names().len()));
     }
 }

@@ -14,6 +14,9 @@ on:
     # Only run on pull requests against main.
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   # We run this job first, to create any GitHub release that we might need.
   # Creating a release can only be done once, so we need to split it out from
@@ -23,16 +26,14 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_version: ${{ steps.extract_release_version.outputs.release_version }}
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Extract release version
         id: extract_release_version
         run: |
           release_version="$(echo '${{ github.ref }}' | sed 's,^.*/\([^/]*\)$,\1,; s,^v,,' )"
           echo Release version: $release_version
-          echo "::set-output name=release_version::$release_version"
+          echo "release_version=$release_version" >> $GITHUB_OUTPUT
       - name: Extract release body from CHANGELOG.md
         id: extract_release_body
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
@@ -49,13 +50,11 @@ jobs:
       - name: "Make release"
         id: create_release
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref }}
-          release_name: "${{ steps.extract_release_version.outputs.release_version }}"
+          name: ${{ steps.extract_release_version.outputs.release_version }}
           body_path: RELEASE_BODY.md
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
 
   # We use a matrix to run our build on every supported platform.
   build:
@@ -75,14 +74,14 @@ jobs:
             host: x86_64-unknown-linux-musl
             cargo: cross
             os: ubuntu-latest
-          - target: x86_64-apple-darwin
-            host: x86_64-apple-darwin
-            cargo: cargo
-            os: macos-latest
-          - target: aarch64-apple-darwin
-            host: x86_64-apple-darwin
-            cargo: cargo
-            os: macos-latest
+          # - target: x86_64-apple-darwin
+          #   host: x86_64-apple-darwin
+          #   cargo: cargo
+          #   os: macos-latest
+          # - target: aarch64-apple-darwin
+          #   host: x86_64-apple-darwin
+          #   cargo: cargo
+          #   os: macos-latest
 
     runs-on: ${{ matrix.os }}
 
@@ -92,25 +91,27 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install automake
-      - uses: abelfodil/protoc-action@v1
-        with:
-          protoc-version: "3.0.0"
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          # We track latest stable Rust instead of hardcoding it because it
-          # virtually never breaks old code.
-          toolchain: stable
-          components: rustfmt, clippy
-          target: ${{ matrix.target }}
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - name: Install protoc
+        run: |
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            brew install protobuf
+          else
+            sudo apt-get update
+            sudo apt-get install -y protobuf-compiler
+          fi
+      # Checks-out our repository first so `rust-toolchain` is present when we
+      # install Rust.
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: ${{ matrix.target }}
       - name: Install Just
         run: |
-          version=1.13.0
+          version=1.42.4
           basename=just-$version-${{ matrix.host }}
           curl -fLO https://github.com/casey/just/releases/download/$version/$basename.tar.gz
           tar xf $basename.tar.gz just
@@ -118,7 +119,7 @@ jobs:
           rm -rf $basename.tar.gz
       - name: Install cargo-deny
         run: |
-          version=0.14.20
+          version=0.20.2
           basename=cargo-deny-$version-${{ matrix.host }}
           curl -fLO https://github.com/EmbarkStudios/cargo-deny/releases/download/$version/$basename.tar.gz
           tar xf $basename.tar.gz
@@ -151,14 +152,10 @@ jobs:
         run: |
           release_file=geocode-csv_${{ needs.create_release.outputs.release_version }}_${{ matrix.target }}.zip
           zip -j $release_file target/${{ matrix.target }}/release/geocode-csv
-          echo "::set-output name=release_file::$release_file"
-      - name: Upload Release Asset
+          echo "release_file=$release_file" >> $GITHUB_OUTPUT
+      - name: Upload release asset
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create_release.outputs.upload_url }}
-          asset_path: ./${{ steps.build_release.outputs.release_file }}
-          asset_name: ${{ steps.build_release.outputs.release_file }}
-          asset_content_type: application/zip
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" "${{ steps.build_release.outputs.release_file }}" --clobber

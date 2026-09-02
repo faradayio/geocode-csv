@@ -13,7 +13,7 @@ use self::{
     structure::Structure,
 };
 
-use super::{Geocoded, Geocoder, MatchStrategy, SharedHttpClient};
+use super::{Geocoded, Geocoder, MatchStrategy};
 
 pub mod client;
 mod structure;
@@ -47,7 +47,7 @@ impl Smarty {
         match_strategy: MatchStrategy,
         license: String,
         rate_limiter: Option<Arc<RateLimiter>>,
-        http_client: SharedHttpClient,
+        http_client: reqwest::Client,
     ) -> Result<Smarty> {
         describe_counter!("geocodecsv.addresses_geocoded.total", "Addresses geocoded");
 
@@ -117,8 +117,8 @@ impl Geocoder for Smarty {
             .await?;
 
         let hits = response.iter().filter(|g| g.is_some()).count();
-        counter!("geocodecsv.addresses_geocoded.total", hits as u64, "geocoder" => "smarty", "geocode_result" => "found");
-        counter!("geocodecsv.addresses_geocoded.total", (addresses.len() - hits) as u64, "geocoder" => "smarty", "geocode_result" => "unknown_address");
+        counter!("geocodecsv.addresses_geocoded.total", "geocoder" => "smarty", "geocode_result" => "found").increment(hits as u64);
+        counter!("geocodecsv.addresses_geocoded.total", "geocoder" => "smarty", "geocode_result" => "unknown_address").increment((addresses.len() - hits) as u64);
 
         // Response with only the addresses that actually geocoded successfully.
         // We need make sure we map outputs back to their original positions.

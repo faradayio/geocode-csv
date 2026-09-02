@@ -8,7 +8,7 @@ use std::sync::atomic::AtomicI64;
 use std::{
     cmp::max, io, iter::FromIterator, sync::Arc, thread::sleep, time::Duration,
 };
-use strum_macros::EnumString;
+use strum::EnumString;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, error, instrument, trace, warn};
@@ -447,21 +447,21 @@ pub async fn geocode_chunk(
                     retry_wait.as_secs(),
                     err
                 );
-                counter!("geocodecsv.chunks_retried.total", 1);
+                counter!("geocodecsv.chunks_retried.total").increment(1);
                 sleep(retry_wait);
                 retry_wait *= 2;
             }
             Err(err) => {
-                counter!("geocodecsv.chunks_failed.total", 1);
+                counter!("geocodecsv.chunks_failed.total").increment(1);
                 return Err(err).context("geocoder error");
             }
             Ok(geocoded) => {
-                counter!("geocodecsv.chunks.total", 1);
+                counter!("geocodecsv.chunks.total").increment(1);
                 break geocoded;
             }
         }
     };
-    counter!("geocodecsv.addresses.total", addresses_len as u64);
+    counter!("geocodecsv.addresses.total").increment(addresses_len as u64);
     trace!("geocoded {} addresses", addresses_len);
 
     // Add address information to our output rows.

@@ -1,7 +1,7 @@
 [package]
 name = "libpostal-sys"
-version = "0.1.1"
-authors = ["Eric Kidd <git@randomhacks.net>"]
+version = "0.1.2"
+authors = ["Eric Kidd <git@randomhacks.net>", "Seamus Abshere <seamus@abshere.net>"]
 edition = "2021"
 links = "postal"
 
@@ -19,12 +19,9 @@ exclude = [
 ]
 
 [build-dependencies]
-autotools = "0.2"
-# This turns out to be pretty heavy build dependency. Better to run it once
-# manually, because we have a bundled `libpostal` that only changes when we
-# update it. See the README.md file.
-#bindgen = "0.53.1"
+autotools = "0.2.7"
+# Updated bindgen to latest version to fix null pointer dereference issues
+bindgen = "0.72.1"
 
 [dependencies]
-lazy_static = "1.4.0"
 

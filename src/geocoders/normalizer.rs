@@ -84,11 +84,8 @@ impl Geocoder for Normalizer {
                     if !normalized_address.eq_ignore_ascii_case(&addresses[i]) {
                         // Only count addresses that we've actually changed in
                         // some way.
-                        counter!(
-                            "geocodecsv.addresses_normalized.total",
-                            1,
-                            "normalizer" => "libpostal"
-                        );
+                        counter!("geocodecsv.addresses_normalized.total", "normalizer" => "libpostal")
+                            .increment(1);
                         trace!(
                             "normalized {:?} to {:?}",
                             &addresses[i],
@@ -125,11 +122,19 @@ fn normalized_to_address(
     // PO boxes supposedly go before street addresses if both are present.
     append_component(component_indices, &mut street, normalized, "po_box");
     append_component(component_indices, &mut street, normalized, "house_number");
-    // "house" is supposedly things like "Empire State Building".
+    // "building" and "house" are both venue/building names like "Empire State
+    // Building". We keep them so we don't drop a meaningful part of the line.
+    append_component(component_indices, &mut street, normalized, "building");
     append_component(component_indices, &mut street, normalized, "house");
     append_component(component_indices, &mut street, normalized, "road");
-    // "unit" is "appt A", or things like that. Lightly normalized.
+    // "unit", "level" (e.g. "3rd Floor"), "staircase", and "entrance" are all
+    // secondary-unit designators. libpostal parses them out, and we used to drop
+    // everything but "unit", which silently discarded floor/staircase/entrance
+    // information before it reached our downstream geocoder.
     append_component(component_indices, &mut street, normalized, "unit");
+    append_component(component_indices, &mut street, normalized, "level");
+    append_component(component_indices, &mut street, normalized, "staircase");
+    append_component(component_indices, &mut street, normalized, "entrance");
 
     // Handle our city. "city_district" may be something like
     // "Brooklyn", with "city" either empty, or containing something
@@ -155,6 +160,9 @@ fn normalized_to_address(
     append_component(component_indices, &mut city, normalized, "suburb");
     append_component(component_indices, &mut city, normalized, "city_district");
     append_component(component_indices, &mut city, normalized, "city");
+    // "island" (e.g. "Maui") is occasionally the most specific locality we have,
+    // so we keep it as part of the city rather than dropping it.
+    append_component(component_indices, &mut city, normalized, "island");
 
     // Handle our state.
     let mut state = String::with_capacity(16);

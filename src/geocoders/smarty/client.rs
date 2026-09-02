@@ -4,16 +4,13 @@ use std::time::Instant;
 use std::{env, str};
 
 use anyhow::{format_err, Context};
-use futures::stream::StreamExt;
-use hyper::{Body, Request};
 use metrics::{counter, describe_histogram, histogram, Unit};
 use serde::{Deserialize, Serialize};
 use tracing::{error, instrument};
 use url::Url;
 
 use crate::addresses::Address;
-use crate::errors::hyper_error_description_for_metrics;
-use crate::geocoders::{MatchStrategy, SharedHttpClient};
+use crate::geocoders::MatchStrategy;
 use crate::unpack_vec::unpack_vec;
 use crate::Result;
 
@@ -65,15 +62,13 @@ pub struct AddressResponse {
     pub fields: serde_json::Value,
 }
 
-/// The real implementation of `S.
 pub struct SmartyClient {
     credentials: Credentials,
-    client: SharedHttpClient,
+    client: reqwest::Client,
 }
 
 impl SmartyClient {
-    /// Create a new Smarty client.
-    pub fn new(client: SharedHttpClient) -> Result<SmartyClient> {
+    pub fn new(client: reqwest::Client) -> Result<SmartyClient> {
         describe_histogram!(
             "geocodecsv.smart.geocode_request.duration_seconds",
             Unit::Seconds,
@@ -86,7 +81,6 @@ impl SmartyClient {
         })
     }
 
-    /// Geocode addresses using Smarty.
     #[instrument(
         name = "SmartyClient::street_addresses",
         level="debug",
@@ -98,100 +92,74 @@ impl SmartyClient {
         requests: Vec<AddressRequest>,
         license: String,
     ) -> Result<Vec<Option<AddressResponse>>> {
-        street_addresses_impl(
-            self.credentials.clone(),
-            self.client.clone(),
-            requests,
-            license,
-        )
-        .await
+        let start = Instant::now();
+
+        let mut url = Url::parse("https://api.smartystreets.com/street-address")?;
+        url.query_pairs_mut()
+            .append_pair("auth-id", &self.credentials.auth_id)
+            .append_pair("auth-token", &self.credentials.auth_token)
+            .append_pair("license", &license)
+            .finish();
+
+        let res = match self.client.post(url.as_str()).json(&requests).send().await {
+            Ok(res) => res,
+            Err(err) => {
+                let desc = reqwest_error_description_for_metrics(&err);
+                counter!("geocodecsv.selected_errors.count", "component" => "smarty", "cause" => desc).increment(1);
+                return Err(err).context("smarty request failed");
+            }
+        };
+        let status = res.status();
+        let body_data = res
+            .bytes()
+            .await
+            .context("failed to read smarty response body")?;
+
+        histogram!("geocodecsv.smarty.geocode_request.duration_seconds")
+            .record((Instant::now() - start).as_secs_f64());
+
+        if status.is_success() {
+            let resps: Vec<AddressResponse> = serde_json::from_slice(&body_data)?;
+            Ok(unpack_vec(resps, requests.len(), |resp| resp.input_index)?)
+        } else {
+            counter!("geocodecsv.selected_errors.count", "component" => "smarty", "cause" => status.to_string()).increment(1);
+
+            if status == 422 {
+                if let Ok(error_response) =
+                    serde_json::from_slice::<SmartyErrorResponse>(&body_data)
+                {
+                    if error_response
+                        .errors
+                        .iter()
+                        .any(|e| e.name == "us-street-api:query-missing-street")
+                    {
+                        let streets = requests
+                            .iter()
+                            .map(|req| req.address.street.to_owned())
+                            .collect::<Vec<_>>();
+                        error!("At least one missing street in: {:?}", streets);
+                    }
+                }
+            }
+
+            Err(format_err!(
+                "geocoding error: {}\n{}",
+                status,
+                String::from_utf8_lossy(&body_data),
+            ))
+        }
     }
 }
 
-/// The real implementation of `street_addresses`.
-async fn street_addresses_impl(
-    credentials: Credentials,
-    client: SharedHttpClient,
-    requests: Vec<AddressRequest>,
-    license: String,
-) -> Result<Vec<Option<AddressResponse>>> {
-    let start = Instant::now();
-
-    // Build our URL.
-    let mut url = Url::parse("https://api.smartystreets.com/street-address")?;
-    url.query_pairs_mut()
-        .append_pair("auth-id", &credentials.auth_id)
-        .append_pair("auth-token", &credentials.auth_token)
-        .append_pair("license", &license)
-        .finish();
-
-    // Make the geocoding request.
-    let req = Request::builder()
-        .method("POST")
-        .uri(url.as_str())
-        .header("Content-Type", "application/json; charset=utf-8")
-        .body(Body::from(serde_json::to_string(&requests)?))?;
-    let res = match client.request(req).await {
-        Ok(res) => res,
-        Err(err) => {
-            // Errors that occur here are being reported by our local HTTP
-            // stack, not the remote server.
-            let desc = hyper_error_description_for_metrics(&err);
-            counter!("geocodecsv.selected_errors.count", 1, "component" => "smarty", "cause" => desc);
-            return Err(err.into());
-        }
-    };
-    let status = res.status();
-    let mut body = res.into_body();
-    let mut body_data = vec![];
-    while let Some(chunk_result) = body.next().await {
-        let chunk = chunk_result?;
-        body_data.extend(&chunk[..]);
-    }
-
-    histogram!(
-        "geocodecsv.smarty.geocode_request.duration_seconds",
-        (Instant::now() - start).as_secs_f64(),
-    );
-
-    // Check the request status.
-    if status.is_success() {
-        let resps: Vec<AddressResponse> = serde_json::from_slice(&body_data)?;
-        Ok(unpack_vec(resps, requests.len(), |resp| resp.input_index)?)
+fn reqwest_error_description_for_metrics(err: &reqwest::Error) -> &'static str {
+    if err.is_timeout() {
+        "timeout"
+    } else if err.is_connect() {
+        "connect"
+    } else if err.is_request() {
+        "request"
     } else {
-        // This error was reported by the remote server.
-
-        // Add error to metrics.
-        counter!("geocodecsv.selected_errors.count", 1, "component" => "smarty", "cause" => status.to_string());
-
-        // Log information about bad street fields, if we can.
-        if status == 422 {
-            if let Ok(error_response) =
-                serde_json::from_slice::<SmartyErrorResponse>(&body_data)
-            {
-                let mut missing_street = false;
-                for error in error_response.errors {
-                    if error.name == "us-street-api:query-missing-street" {
-                        missing_street = true;
-                        break;
-                    }
-                }
-                if missing_street {
-                    let streets = requests
-                        .iter()
-                        .map(|req| req.address.street.to_owned())
-                        .collect::<Vec<_>>();
-                    error!("At least one missing street in: {:?}", streets);
-                }
-            }
-        }
-
-        // Convert to a Rust error.
-        Err(format_err!(
-            "geocoding error: {}\n{}",
-            status,
-            String::from_utf8_lossy(&body_data),
-        ))
+        "other"
     }
 }
 

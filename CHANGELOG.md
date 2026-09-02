@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.4.1-alpha.1] - 2026-09-01
+
+### Added
+
+- `libpostal` output now includes the `building` and `metro_station` columns, which the address parser can produce but which we previously discarded.
+- `--refresh-failures-after-days`, `--refresh-failures-max-attempts`, optional `--refresh-successes-after-days`, and `--refresh-rate` re-geocode stale BigTable cache entries on the read path. Failures back off exponentially (`period * 2^attempts`) and stop after max attempts. A per-key-per-day rate cap bounds spend so a bulk-loaded backlog does not all come due on one day. New rows keep the legacy `N` payload so older binaries can still read them; refresh metadata is appended after that payload. If a success refresh comes back as no match, the prior success is kept.
+
+### Changed
+
+- Reworked the set of `libpostal` output columns to match the labels the address parser can actually emit (per `address_parser.h`). This removes ten columns that were always empty (`archipelago`, `continent`, `country_code`, `county`, `hamlet`, `municipality`, `neighbourhood`, `postal_city`, `region`, `village`), because they came from OpenCage's address-_formatting_ vocabulary rather than libpostal's parser vocabulary. This changes the columns emitted by `--include-libpostal`.
+- Upgraded all dependencies to latest versions, including `bigtable_rs` 0.4, `reqwest` 0.13, `sha2` 0.11, `strum` 0.28, `clap` 4.6, `tikv-jemallocator` 0.7.
+- Replaced hand-rolled `hyper`/`hyper-util`/`http-body-util`/`hyper-rustls` HTTP client for Smarty API with `reqwest`, removing four direct dependencies.
+- Replaced `jemallocator` with `tikv-jemallocator`, the actively maintained fork.
+- Replaced `lazy_static` with `std::sync::LazyLock` in `libpostal-sys` and `libpostal-rust`.
+- Consolidated `strum` + `strum_macros` into `strum` with `derive` feature.
+- Removed standalone `serde_derive` dependency (already re-exported by `serde` with `derive` feature).
+- Bumped Rust edition from 2018 to 2021.
+
+### Fixed
+
+- When normalizing addresses, we no longer drop the secondary-unit designators `level` (e.g. "2nd Floor"), `staircase`, and `entrance` that libpostal parses out. These are now appended to the street, alongside `building`, so they reach the downstream geocoder instead of being silently discarded (the same class of bug as the earlier "city parsed as suburb" fix).
+- `island` (e.g. "Maui") is now kept as part of the city during normalization instead of being dropped.
+
 ## [1.4.0] - 2024-04-26
 
 ### Added

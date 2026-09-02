@@ -13,7 +13,9 @@ use url::Url;
 
 use crate::Result;
 
-use super::{KeyValueStore, KeyValueStoreNew, PipelinedGet, PipelinedSet};
+use super::{
+    CachedValue, KeyValueStore, KeyValueStoreNew, PipelinedGet, PipelinedSet,
+};
 
 /// A simple Redis client.
 pub struct Redis {
@@ -94,22 +96,25 @@ impl<'store> PipelinedGet<'store> for RedisPipelinedGet<'store> {
     }
 
     #[instrument(name = "PipelinedGet::execute", level = "trace", skip_all)]
-    async fn execute(&self) -> Result<Vec<Option<Vec<u8>>>> {
+    async fn execute(&self) -> Result<Vec<Option<CachedValue>>> {
         let start = Instant::now();
 
         let mut client = self.redis.client().await?;
-        let result = self
+        let result: Vec<Option<Vec<u8>>> = self
             .pipeline
             .query_async(&mut *client)
             .await
             .context("could not fetch keys from Redis")?;
 
-        histogram!(
-            "geocodecsv.redis.get_request.duration_seconds",
-            (Instant::now() - start).as_secs_f64(),
-        );
+        histogram!("geocodecsv.redis.get_request.duration_seconds")
+            .record((Instant::now() - start).as_secs_f64());
 
-        Ok(result)
+        // Redis does not give us a usable per-entry write time, so we can't
+        // support age-based auto-refresh on this backend.
+        Ok(result
+            .into_iter()
+            .map(|found| found.map(|bytes| CachedValue { bytes, age: None }))
+            .collect())
     }
 }
 
@@ -137,10 +142,8 @@ impl<'store> PipelinedSet<'store> for RedisPipelinedSet<'store> {
             .await
             .context("could not fetch keys from Redis")?;
 
-        histogram!(
-            "geocodecsv.redis.set_request.duration_seconds",
-            (Instant::now() - start).as_secs_f64(),
-        );
+        histogram!("geocodecsv.redis.set_request.duration_seconds")
+            .record((Instant::now() - start).as_secs_f64());
 
         Ok(result)
     }

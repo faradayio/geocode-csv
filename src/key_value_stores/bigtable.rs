@@ -8,14 +8,12 @@ use std::{
 
 use anyhow::{format_err, Context};
 use async_trait::async_trait;
-use bigtable_rs::{
-    bigtable::{self, BigTable as BigTableClient, BigTableConnection},
-    google::bigtable::v2::{
-        mutate_rows_request::Entry,
-        mutation::{self, SetCell},
-        row_filter::{Chain, Filter},
-        MutateRowsRequest, Mutation, ReadRowsRequest, RowFilter, RowSet,
-    },
+use bigtable_rs::bigtable::{self, BigTable as BigTableClient, BigTableConnection};
+use googleapis_tonic_google_bigtable_v2::google::bigtable::v2::{
+    mutate_rows_request::Entry,
+    mutation::{self, SetCell},
+    row_filter::{Chain, Filter},
+    MutateRowsRequest, Mutation, ReadRowsRequest, RowFilter, RowSet,
 };
 use metrics::{counter, describe_histogram, histogram, Unit};
 use tracing::{instrument, trace};
@@ -23,7 +21,9 @@ use url::Url;
 
 use crate::{pipeline::CONCURRENCY, Result};
 
-use super::{KeyValueStore, KeyValueStoreNew, PipelinedGet, PipelinedSet};
+use super::{
+    CachedValue, KeyValueStore, KeyValueStoreNew, PipelinedGet, PipelinedSet,
+};
 
 const GEOCODE_CSV_FAMILY_NAME: &str = "geocode_csv";
 const GEOCODE_CSV_COLUMN_NAME: &[u8] = b"v";
@@ -138,7 +138,6 @@ impl KeyValueStoreNew for BigTable {
             Unit::Seconds,
             "Time required for BigTable MutateRows requests"
         );
-
         let config = BigTableConfig::from_url(&url)?;
         let connection = BigTableConnection::new(
             &config.project_id,
@@ -173,8 +172,14 @@ impl<'store> PipelinedGet<'store> for BigTablePipelinedGet<'store> {
     }
 
     #[instrument(name = "PipelinedGet::execute", level = "trace", skip_all, fields(row_keys.len = self.row_keys.len()))]
-    async fn execute(&self) -> Result<Vec<Option<Vec<u8>>>> {
+    async fn execute(&self) -> Result<Vec<Option<CachedValue>>> {
         let start = Instant::now();
+
+        // The current time, used to compute each entry's age once per batch.
+        let now_micros = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_micros() as i64;
 
         // Build and run our query.
         let mut client = self.bigtable.client();
@@ -210,7 +215,7 @@ impl<'store> PipelinedGet<'store> for BigTablePipelinedGet<'store> {
             Ok(response) => response,
             Err(err) => {
                 let cause = bigtable_error_cause_for_metrics(&err);
-                counter!("geocodecsv.selected_errors.count", 1, "component" => "bigtable", "cause" => cause);
+                counter!("geocodecsv.selected_errors.count", "component" => "bigtable", "cause" => cause).increment(1);
                 return Err(err).context("error checking BigTable for cached values");
             }
         };
@@ -227,16 +232,15 @@ impl<'store> PipelinedGet<'store> for BigTablePipelinedGet<'store> {
             );
         }
 
-        histogram!(
-            "geocodecsv.bigtable.get_request.duration_seconds",
-            (Instant::now() - start).as_secs_f64(),
-        );
+        histogram!("geocodecsv.bigtable.get_request.duration_seconds")
+            .record((Instant::now() - start).as_secs_f64());
 
         // Build a vec to store our result, and a `HashMap` mapping keys to vec
         // indices. We have to be careful because keys might appear more than
         // once. Ideally our callers wouldn't do that, but if they do, we need
         // to handle it.
-        let mut result: Vec<Option<Vec<u8>>> = vec![None; self.row_keys.len()];
+        let mut result: Vec<Option<CachedValue>> =
+            (0..self.row_keys.len()).map(|_| None).collect();
         let mut row_key_indices = HashMap::<Vec<u8>, Vec<usize>>::new();
         for (idx, row_key) in self.row_keys.iter().enumerate() {
             row_key_indices
@@ -272,12 +276,19 @@ impl<'store> PipelinedGet<'store> for BigTablePipelinedGet<'store> {
                     ));
                 }
 
-                // Write this match to our result array.
+                // Record the entry's age so the cache layer can decide whether
+                // it is stale enough to refresh.
+                let age = Duration::from_micros(
+                    (now_micros - row_cell.timestamp_micros).max(0) as u64,
+                );
                 let indices = row_key_indices
                     .get(&key)
                     .expect("we should always have a known key");
                 for idx in indices {
-                    result[*idx] = Some(row_cell.value.clone());
+                    result[*idx] = Some(CachedValue {
+                        bytes: row_cell.value.clone(),
+                        age: Some(age),
+                    });
                 }
             }
         }
@@ -306,6 +317,7 @@ impl<'store> PipelinedSet<'store> for BigTablePipelinedSet<'store> {
                     value,
                 })),
             }],
+            idempotency: None,
         })
     }
 
@@ -318,18 +330,17 @@ impl<'store> PipelinedSet<'store> for BigTablePipelinedSet<'store> {
         let request = MutateRowsRequest {
             table_name: client.get_full_table_name(&self.bigtable.table_name),
             app_profile_id: "".to_owned(), // Dave says this is what we want.
+            authorized_view_name: "".to_owned(),
             entries: self.entries.clone(),
         };
         if let Err(err) = client.mutate_rows(request).await {
             let cause = bigtable_error_cause_for_metrics(&err);
-            counter!("geocodecsv.selected_errors.count", 1, "component" => "bigtable", "cause" => cause);
+            counter!("geocodecsv.selected_errors.count", "component" => "bigtable", "cause" => cause).increment(1);
             return Err(err).context("error writing cached values to BigTable");
         }
 
-        histogram!(
-            "geocodecsv.bigtable.set_request.duration_seconds",
-            (Instant::now() - start).as_secs_f64(),
-        );
+        histogram!("geocodecsv.bigtable.set_request.duration_seconds")
+            .record((Instant::now() - start).as_secs_f64());
         Ok(())
     }
 }
@@ -354,5 +365,7 @@ fn bigtable_error_cause_for_metrics(err: &bigtable::Error) -> Cow<'static, str> 
         bigtable::Error::TimeoutError(_) => Cow::Borrowed("timeout"),
         bigtable::Error::ChunkError(_) => Cow::Borrowed("chunk"),
         bigtable::Error::GCPAuthError(_) => Cow::Borrowed("gcp auth"),
+        bigtable::Error::MetadataError(_) => Cow::Borrowed("metadata error"),
+        bigtable::Error::InvalidArgument(_) => Cow::Borrowed("invalid argument"),
     }
 }

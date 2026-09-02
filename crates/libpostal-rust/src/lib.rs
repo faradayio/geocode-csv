@@ -42,7 +42,7 @@ use init::{
 use libpostal_sys::{
     libpostal_address_parser_response_destroy, libpostal_expand_address,
     libpostal_expansion_array_destroy, libpostal_get_address_parser_default_options,
-    libpostal_get_default_options, libpostal_parse_address, size_t, GLOBAL_LOCK,
+    libpostal_get_default_options, libpostal_parse_address, GLOBAL_LOCK,
 };
 
 mod errors;
@@ -123,7 +123,7 @@ pub fn expand_address(addr: &str, _opt: &ExpandAddressOptions) -> Result<Vec<Str
     let expand_options = unsafe { libpostal_get_default_options() };
 
     // Parse the address.
-    let mut num_expansions: size_t = 0;
+    let mut num_expansions: usize = 0;
     let expansions = unsafe {
         libpostal_expand_address(
             addr.as_ptr() as *mut _,
@@ -133,10 +133,10 @@ pub fn expand_address(addr: &str, _opt: &ExpandAddressOptions) -> Result<Vec<Str
     };
 
     // Convert our results for Rust.
-    let mut result = Vec::with_capacity(num_expansions as usize);
+    let mut result = Vec::with_capacity(num_expansions);
     for i in 0..num_expansions {
         let expansion = unsafe {
-            CStr::from_ptr(*expansions.offset(i as isize))
+            CStr::from_ptr(*expansions.add(i))
                 .to_str()
                 .expect("expansion contained invalid UTF-8")
         };

@@ -3,6 +3,8 @@
 use metrics::SetRecorderError;
 use thiserror::Error;
 
+use crate::NewRelicRecorder;
+
 /// An error occurred building or installing our metrics recorder.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -11,7 +13,7 @@ pub enum BuildError {
     #[non_exhaustive]
     SetRecorderError {
         #[from]
-        source: SetRecorderError,
+        source: SetRecorderError<NewRelicRecorder>,
     },
 }
 
