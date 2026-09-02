@@ -95,19 +95,16 @@ jobs:
           brew install automake
       - name: Install protoc
         uses: arduino/setup-protoc@v3
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          # We track latest stable Rust instead of hardcoding it because it
-          # virtually never breaks old code.
-          toolchain: stable
-          components: rustfmt, clippy
-          target: ${{ matrix.target }}
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      # Checks-out our repository first so `rust-toolchain` is present when we
+      # install Rust.
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: ${{ matrix.target }}
       - name: Install Just
         run: |
           version=1.42.4
@@ -118,7 +115,7 @@ jobs:
           rm -rf $basename.tar.gz
       - name: Install cargo-deny
         run: |
-          version=0.18.4
+          version=0.20.2
           basename=cargo-deny-$version-${{ matrix.host }}
           curl -fLO https://github.com/EmbarkStudios/cargo-deny/releases/download/$version/$basename.tar.gz
           tar xf $basename.tar.gz
